@@ -5,7 +5,7 @@
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE)](https://learn.microsoft.com/powershell/)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB)](https://www.python.org/downloads/windows/)
 
-![AutoDoctor Banner Placeholder](./docs/assets/autodoctor-banner-placeholder.png)
+![AutoDoctor Banner Placeholder](./docs/assets/autodoctor-banner.png)
 
 AutoDoctor is a Windows diagnostics and remediation tool that combines:
 
@@ -14,21 +14,25 @@ AutoDoctor is a Windows diagnostics and remediation tool that combines:
 - a FastAPI service for structured data access
 - a browser dashboard for real-time visualization
 
-Documentation: [projectindexly.com/autodoctor](https://projectindexly.com/autodoctor)  
+Documentation: [projectindexly.com/autodoctor](https://projectindexly.com/autodoctor)
 Project Indexly (main repo): [github.com/kimsgent/project-indexly](https://github.com/kimsgent/project-indexly)
 
 ## Table of Contents
 
-1. [What AutoDoctor Does](#what-autodoctor-does)
-2. [Architecture](#architecture)
-3. [Requirements](#requirements)
-4. [Installation Paths](#installation-paths)
-5. [Runtime Configuration](#runtime-configuration)
-6. [Run and Verify](#run-and-verify)
-7. [Build and Packaging](#build-and-packaging)
-8. [API Endpoints](#api-endpoints)
-9. [Documentation](#documentation)
-10. [Disclaimer and Rights](#disclaimer-and-rights)
+- [AutoDoctor](#autodoctor)
+  - [Table of Contents](#table-of-contents)
+  - [What AutoDoctor Does](#what-autodoctor-does)
+  - [Architecture](#architecture)
+  - [Requirements](#requirements)
+  - [Installation Paths](#installation-paths)
+    - [A) Installer deployment (recommended for endpoints)](#a-installer-deployment-recommended-for-endpoints)
+    - [B) Source/development deployment (`.venv`)](#b-sourcedevelopment-deployment-venv)
+  - [Runtime Configuration](#runtime-configuration)
+  - [Run and Verify](#run-and-verify)
+  - [Build and Packaging](#build-and-packaging)
+  - [API Endpoints](#api-endpoints)
+  - [Documentation](#documentation)
+  - [Disclaimer and Rights](#disclaimer-and-rights)
 
 ## What AutoDoctor Does
 
@@ -181,8 +185,8 @@ Suggested reading order:
 
 ## Disclaimer and Rights
 
-AutoDoctor is provided for diagnostics and operational support workflows.  
+AutoDoctor is provided for diagnostics and operational support workflows.
 Remediation actions can modify system state and should be run by authorized administrators in controlled contexts.
 
-Dashboard and generated reports include product-specific disclaimer text; keep these notices intact in redistributed builds.  
+Dashboard and generated reports include product-specific disclaimer text; keep these notices intact in redistributed builds.
 Third-party platform names and trademarks remain the property of their respective owners.

@@ -1,7 +1,3 @@
-Here’s a version **fully adapted for AutoDoctor**, keeping it professional and clear:
-
----
-
 # Contributing to AutoDoctor
 
 Thank you for considering contributing! Your help improves AutoDoctor for everyone and ensures reliable diagnostics and remediation for Windows systems.
@@ -82,4 +78,3 @@ By contributing, you agree to follow the [Contributor Covenant Code of Conduct](
 ---
 
 Thank you for helping make AutoDoctor better! 🚀
-
