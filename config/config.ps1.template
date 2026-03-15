@@ -1,0 +1,57 @@
+# AutoDoctor Configuration Template
+# Copy this file to config.ps1 and adjust variables if you want to override
+# the default installation paths used by AutoDoctor.
+
+
+# ------------------------------------------------
+# Determine root directory
+# ------------------------------------------------
+
+
+if ($env:AUTO_DOCTOR_HOME) {
+
+    $Global:AutoDoctorRoot = $env:AUTO_DOCTOR_HOME
+
+}
+else {
+
+    # Detect project root relative to this script
+    $projectRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+
+    if (Test-Path (Join-Path $projectRoot "agent")) {
+
+        # Development environment
+        $Global:AutoDoctorRoot = $projectRoot
+
+    }
+    else {
+
+        # Installed environment
+        $Global:AutoDoctorRoot = Join-Path $env:ProgramData "AutoDoctor"
+
+    }
+
+}
+
+# ------------------------------------------------
+# Subdirectories
+# ------------------------------------------------
+
+$Global:AutoDoctorPaths = @{
+    Root        = $Global:AutoDoctorRoot
+    Config      = Join-Path $Global:AutoDoctorRoot "config"
+    DB          = Join-Path $Global:AutoDoctorRoot "db"
+    Reports     = Join-Path $Global:AutoDoctorRoot "reports"
+    Telemetry   = Join-Path $Global:AutoDoctorRoot "telemetry"
+    Diagnostics = Join-Path $Global:AutoDoctorRoot "diagnostics"
+    Logs        = Join-Path $Global:AutoDoctorRoot "logs"
+    Dashboard   = Join-Path $Global:AutoDoctorRoot "server"
+}
+
+$Global:AutoDoctorDBPath     = Join-Path $Global:AutoDoctorPaths.DB "autodoctor.db"
+$Global:AutoDoctorReportHTML = Join-Path $Global:AutoDoctorPaths.Reports "AutoDoctor_Report.html"
+$Global:AutoDoctorReportJSON = Join-Path $Global:AutoDoctorPaths.Reports "AutoDoctor_Report.json"
+$Global:AutoDoctorLogFile    = Join-Path $Global:AutoDoctorPaths.Logs "autodoctor.log"
+$Global:AutoDoctorConfigINI  = Join-Path $Global:AutoDoctorPaths.Config "autodoctor.ini"
+$Global:AutoDoctorVersionFile = Join-Path $Global:AutoDoctorRoot "VERSION"
+$Global:AutoDoctorMetaJSON   = Join-Path $Global:AutoDoctorPaths.Dashboard "latest_run.json"

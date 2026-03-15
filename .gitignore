@@ -1,0 +1,105 @@
+# -------------------------------------------------
+
+# AutoDoctor - Git Ignore
+
+# -------------------------------------------------
+
+# -----------------------------
+
+# Runtime / Generated Data
+
+# -----------------------------
+
+logs/
+telemetry/
+diagnostics/
+reports/AutoDoctor_Report.*
+server/latest_run.json
+
+# -----------------------------
+
+# Database
+
+# -----------------------------
+
+db/*.db
+db/*.sqlite
+db/*.sqlite3
+
+# -----------------------------
+
+# Python Cache / Build
+
+# -----------------------------
+
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+
+# -----------------------------
+
+# VSCode (keep configs but ignore local state)
+
+# -----------------------------
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# -----------------------------
+
+# Temporary Files
+
+# -----------------------------
+
+*.tmp
+*.temp
+*.log
+
+# -----------------------------
+
+# OS Files
+
+# -----------------------------
+
+Thumbs.db
+.DS_Store
+
+# -----------------------------
+
+# Build / Installer Output
+
+# -----------------------------
+
+build/
+installer/output/
+installer/build/
+
+# -----------------------------
+
+# Test Artifacts
+
+# -----------------------------
+
+*.coverage
+coverage.xml
+htmlcov/
+
+# -----------------------------
+# Python Virtual Environments
+# -----------------------------
+.venv/
+venv/
+env/
+
+# -----------------------------
+
+# Editor Backup Files
+
+# -----------------------------
+
+*~
+*.bak
+*.swp

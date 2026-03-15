@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "PowerShell",
+            "request": "launch",
+            "name": "Run AutoDoctor Agent",
+            "script": "${workspaceFolder}/agent/AutoDoctor.ps1"
+        },
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Run Dashboard API",
+            "program": "${workspaceFolder}/server/api/app.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
