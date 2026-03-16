@@ -1,5 +1,5 @@
 # Core dependencies
 fastapi==0.111.0
 uvicorn[standard]==0.23.2
-pywin32==305
-pyinstaller==5.14.1
+pywin32==311
+pyinstaller==6.19.0

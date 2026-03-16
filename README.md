@@ -1,9 +1,17 @@
 # AutoDoctor
 
-[![Docs](https://img.shields.io/badge/docs-projectindexly.com%2Fautodoctor-0A66C2)](https://projectindexly.com/autodoctor)
-[![Platform](https://img.shields.io/badge/platform-Windows-0078D6)](https://www.microsoft.com/windows)
-[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE)](https://learn.microsoft.com/powershell/)
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB)](https://www.python.org/downloads/windows/)
+<a href="https://projectindexly.com/autodoctor">
+  <img src="./docs/assets/autodoctor-badge-github.png" width="100">
+</a>
+<a href="https://www.microsoft.com/windows">
+  <img src="https://img.shields.io/badge/platform-Windows-0078D6">
+</a>
+<a href="https://learn.microsoft.com/powershell/">
+  <img src="https://img.shields.io/badge/PowerShell-5.1%2B-5391FE">
+</a>
+<a href="https://www.python.org/downloads/windows/">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB">
+</a>
 
 ![AutoDoctor Banner Placeholder](./docs/assets/autodoctor-banner.png)
 

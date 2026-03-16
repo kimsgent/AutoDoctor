@@ -1,0 +1,109 @@
+name: Publish-Release-AutoDoctor
+
+on:
+  push:
+    tags:
+      - v* # triggers on version tags like v1.0.0
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Fake version (for dry-run testing)
+        required: false
+        default: v0.0.0-test
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set version variable
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
+            echo "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_ENV
+          } else {
+            echo "VERSION=${GITHUB_REF_NAME}" >> $env:GITHUB_ENV
+          }
+
+      - name: Determine prerelease and dry-run
+        id: prerelease
+        shell: pwsh
+        run: |
+          if ($env:VERSION -match "(alpha|beta|rc|test|-test)") {
+            echo "prerelease=true" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+          } else {
+            echo "prerelease=false" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+          }
+          if ($env:VERSION -eq "v0.0.0-test") {
+            echo "dryrun=true" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+          } else {
+            echo "dryrun=false" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+          }
+
+      - name: Generate release notes
+        run: python scripts/generate_releases.py
+
+      - name: Prepare GitHub release notes
+        run: python scripts/prepare_release_notes.py $env:VERSION
+
+      - name: Check if release exists
+        id: check_release
+        shell: pwsh
+        run: |
+          $exists = & gh release view $env:VERSION -q '.name' 2>$null
+          if ($exists) { Write-Host "Release exists"; exit 1 }
+        continue-on-error: true
+
+      - name: Build AutoDoctor Installer
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File installer/Build-AutoDoctor.ps1
+
+      - name: Prepare release folder
+        shell: pwsh
+        run: |
+          if (-Not (Test-Path "dist")) { New-Item -ItemType Directory -Path dist }
+          $exePath = "installer/output/AutoDoctor_Installer_*.exe"
+          $exeFile = Get-ChildItem $exePath | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          Copy-Item $exeFile.FullName -Destination "dist/AutoDoctorInstaller-$env:VERSION.exe"
+
+      - name: Zip Installer
+        shell: pwsh
+        run: |
+          $zipFile = "dist/AutoDoctorInstaller-$env:VERSION.zip"
+          if (Test-Path $zipFile) { Remove-Item $zipFile }
+          Compress-Archive -Path "dist/AutoDoctorInstaller-$env:VERSION.exe" -DestinationPath $zipFile
+
+      - name: Generate SHA256 checksum
+        shell: pwsh
+        run: |
+          $zipFile = "dist/AutoDoctorInstaller-$env:VERSION.zip"
+          $sha256 = Get-FileHash -Algorithm SHA256 $zipFile | Select-Object -ExpandProperty Hash
+          Set-Content -Path "dist/AutoDoctorInstaller-$env:VERSION.sha256" -Value $sha256
+          Write-Host "SHA256: $sha256"
+
+      - name: Upload release asset with notes
+        if: ${{ steps.prerelease.outputs.dryrun != 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/AutoDoctorInstaller-$env:VERSION.zip
+            dist/AutoDoctorInstaller-$env:VERSION.sha256
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ steps.prerelease.outputs.prerelease }}
