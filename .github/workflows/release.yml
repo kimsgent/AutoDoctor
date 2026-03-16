@@ -1,4 +1,4 @@
-name: Publish Release - AutoDoctor
+name: Publish-Release-AutoDoctor
 
 on:
   push:
