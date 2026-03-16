@@ -78,7 +78,7 @@ def main():
     # ---------------------------------------------
 
     if release_exists(version):
-        print(f"⚠️ Release {version} already exists on GitHub, skipping notes generation")
+        print(f"WARNING: Release {version} already exists on GitHub, skipping notes generation")
         return
 
     # ---------------------------------------------
@@ -88,7 +88,7 @@ def main():
     release_file = find_release_file(version)
 
     if release_file:
-        print(f"✅ Using {release_file} for release notes")
+        print(f"INFO: Using {release_file} for release notes")
 
         content = release_file.read_text(encoding="utf-8")
         NOTES_FILE.write_text(content, encoding="utf-8")
@@ -98,10 +98,10 @@ def main():
     # Fallback to changelog.json
     # ---------------------------------------------
 
-    print("⚠️ Release markdown not found, falling back to changelog.json")
+    print("WARNING: Release markdown not found, falling back to changelog.json")
 
     if not CHANGELOG_FILE.exists():
-        print("❌ changelog.json missing")
+        print("ERROR: changelog.json missing")
         sys.exit(1)
 
     data = json.loads(CHANGELOG_FILE.read_text(encoding="utf-8"))
@@ -123,7 +123,7 @@ def main():
 
             NOTES_FILE.write_text("\n".join(content), encoding="utf-8")
 
-            print(f"✅ Release notes generated from changelog.json for {version}")
+            print(f"INFO: Release notes generated from changelog.json for {version}")
             return
 
     # ---------------------------------------------
@@ -146,7 +146,7 @@ def main():
 
         NOTES_FILE.write_text("\n".join(dummy_content), encoding="utf-8")
 
-        print(f"ℹ️ Dummy release notes created for {version}")
+        print(f"INFO: Dummy release notes created for {version}")
 
     else:
 
@@ -155,7 +155,7 @@ def main():
             encoding="utf-8",
         )
 
-        print(f"⚠️ No release notes found for {version}")
+        print(f"WARNING: No release notes found for {version}")
 
 
 if __name__ == "__main__":
