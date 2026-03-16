@@ -1,6 +1,6 @@
 # AutoDoctor
 
-[![Docs](./docs/assets/autodoctor-badge-ori.png)](https://projectindexly.com/autodoctor)
+[![Docs](https://img.shields.io/badge/docs-projectindexly.com%2Fautodoctor-0A66C2)](./docs/assets/autodoctor-badge-ori.png)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6)](https://www.microsoft.com/windows)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE)](https://learn.microsoft.com/powershell/)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB)](https://www.python.org/downloads/windows/)
