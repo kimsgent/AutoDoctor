@@ -3,7 +3,7 @@ name: Publish-Release-AutoDoctor
 on:
   push:
     tags:
-      - v*  # triggers on version tags like v1.0.0
+      - v* # triggers on version tags like v1.0.0
   workflow_dispatch:
     inputs:
       version:
@@ -99,6 +99,7 @@ jobs:
           Write-Host "SHA256: $sha256"
 
       - name: Upload release asset with notes
+        if: ${{ steps.prerelease.outputs.dryrun != 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           files: |
