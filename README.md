@@ -180,7 +180,7 @@ Installer script:
 
 ## Documentation
 
-- Docs home: [projectindexly.com/autodoctor](https://projectindexly.com/autodoctor)
+- Docs home: [projectindexly.com/autodoctor](https://projectindexly.com/en/documentation/autodoctor/)
 - Local docs source: [`docs/content/autodoctor`](./docs/content/)
 
 Suggested reading order:
