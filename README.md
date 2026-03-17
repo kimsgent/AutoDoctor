@@ -22,7 +22,7 @@ AutoDoctor is a Windows diagnostics and remediation tool that combines:
 - a FastAPI service for structured data access
 - a browser dashboard for real-time visualization
 
-Documentation: [projectindexly.com/autodoctor](https://projectindexly.com/autodoctor)
+Documentation: [projectindexly.com/autodoctor](https://projectindexly.com/en/documentation/autodoctor/)
 Project Indexly (main repo): [github.com/kimsgent/project-indexly](https://github.com/kimsgent/project-indexly)
 
 ## Table of Contents
