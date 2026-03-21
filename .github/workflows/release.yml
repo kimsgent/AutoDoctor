@@ -36,10 +36,17 @@ jobs:
         shell: pwsh
         run: |
           if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
-            echo "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_ENV
+            "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_ENV
           } else {
-            echo "VERSION=${GITHUB_REF_NAME}" >> $env:GITHUB_ENV
+            "VERSION=$env:GITHUB_REF_NAME" >> $env:GITHUB_ENV
           }
+
+          if (-not $env:VERSION) {
+            Write-Error "VERSION is not set"
+            exit 1
+          }
+
+          Write-Host "Using VERSION=$env:VERSION"
 
       - name: Determine prerelease and dry-run
         id: prerelease
@@ -61,6 +68,16 @@ jobs:
 
       - name: Prepare GitHub release notes
         run: python scripts/prepare_release_notes.py $env:VERSION
+
+      - name: Verify release notes
+        shell: pwsh
+        run: |
+          if (Test-Path RELEASE_NOTES.md) {
+            Write-Host "OK: RELEASE_NOTES.md exists"
+            Get-Content RELEASE_NOTES.md
+          } else {
+            Write-Host "WARNING: RELEASE_NOTES.md missing"
+          }
 
       - name: Check if release exists
         id: check_release

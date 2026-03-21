@@ -28,6 +28,7 @@ NOTES_FILE = PROJECT_ROOT / "RELEASE_NOTES.md"
 # HELPERS
 # --------------------------------------------------
 
+
 def release_exists(version: str) -> bool:
     """Check if a GitHub release already exists."""
     if shutil.which("gh") is None:
@@ -65,6 +66,7 @@ def find_release_file(version: str):
 # MAIN
 # --------------------------------------------------
 
+
 def main():
 
     if len(sys.argv) < 2:
@@ -74,12 +76,49 @@ def main():
     version = sys.argv[1]  # example: v1.1.0 or v1.1.0-test
 
     # ---------------------------------------------
-    # Skip if GitHub release already exists
+    # ALWAYS generate release notes
     # ---------------------------------------------
 
-    if release_exists(version):
-        print(f"WARNING: Release {version} already exists on GitHub, skipping notes generation")
-        return
+    try:
+        release_file = find_release_file(version)
+
+        if release_file:
+            print(f"INFO: Using {release_file} for release notes")
+            content = release_file.read_text(encoding="utf-8")
+            NOTES_FILE.write_text(content, encoding="utf-8")
+            return
+
+        print("WARNING: Release markdown not found, falling back to changelog.json")
+
+        if CHANGELOG_FILE.exists():
+            data = json.loads(CHANGELOG_FILE.read_text(encoding="utf-8"))
+
+            for v in data.get("versions", []):
+                if "v" + v["version"] == version:
+                    content = [
+                        f"# AutoDoctor {version}",
+                        "",
+                        f"Release date: {v['date']}",
+                        "",
+                        "## Changes",
+                        "",
+                    ]
+                    content += [f"- {c}" for c in v["changes"]]
+
+                    NOTES_FILE.write_text("\n".join(content), encoding="utf-8")
+                    return
+
+        # fallback of last resort
+        NOTES_FILE.write_text(
+            f"# AutoDoctor {version}\n\nNo release notes available.", encoding="utf-8"
+        )
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        NOTES_FILE.write_text(
+            f"# AutoDoctor {version}\n\nFailed to generate release notes.",
+            encoding="utf-8",
+        )
 
     # ---------------------------------------------
     # Try using generated release markdown

@@ -1,0 +1,15 @@
+# AutoDoctor v1.0.0
+
+Release date: 2026-03-16
+
+## Changes
+
+- feat(core): initial release of AutoDoctor diagnostic platform
+- feat(system): implement modular health check engine for Windows environments
+- feat(reporting): add automated HTML diagnostic report generation
+- feat(telemetry): introduce telemetry collection and structured logging
+- feat(cli): provide command-line interface for running diagnostic modules
+- feat(modules): include network, system, and service health checks
+- feat(installer): add packaged Windows installer for simplified deployment
+- docs: add initial project documentation and usage instructions
+- ci(release): implement automated release pipeline and versioned release notes
