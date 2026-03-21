@@ -89,20 +89,43 @@ jobs:
             Write-Host "WARNING: RELEASE_NOTES.md missing"
           }
 
+      # >>> PATCHED BLOCK: check release existence and expose output <<<
       - name: Check if release exists
         id: check_release
         shell: pwsh
         run: |
+          # Skip the check for dry-run version, but still mark exists=false
+          if ($env:VERSION -eq "v0.0.0-test") {
+            Write-Host "Dry-run version detected, skipping release existence check"
+            "exists=false" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+            exit 0
+          }
+
           $exists = & gh release view $env:VERSION -q '.name' 2>$null
-          if ($exists) { Write-Host "Release exists"; exit 1 }
+
+          if ($exists) {
+            Write-Host "Release $env:VERSION already exists"
+            "exists=true" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+            exit 1
+          } else {
+            Write-Host "No existing release for $env:VERSION"
+            "exists=false" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+          }
         continue-on-error: true
+      # <<< END PATCHED BLOCK >>>
+
+      # All build/packaging steps now *only* run if:
+      # - Not a dry-run
+      # - And release does not exist
 
       - name: Build AutoDoctor Installer
+        if: ${{ steps.prerelease.outputs.dryrun != 'true' && steps.check_release.outputs.exists != 'true' }}
         shell: pwsh
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File installer/Build-AutoDoctor.ps1
 
       - name: Prepare release folder
+        if: ${{ steps.prerelease.outputs.dryrun != 'true' && steps.check_release.outputs.exists != 'true' }}
         shell: pwsh
         run: |
           if (-Not (Test-Path "dist")) { New-Item -ItemType Directory -Path dist }
@@ -111,6 +134,7 @@ jobs:
           Copy-Item $exeFile.FullName -Destination "dist/AutoDoctorInstaller-$env:VERSION.exe"
 
       - name: Zip Installer
+        if: ${{ steps.prerelease.outputs.dryrun != 'true' && steps.check_release.outputs.exists != 'true' }}
         shell: pwsh
         run: |
           $zipFile = "dist/AutoDoctorInstaller-$env:VERSION.zip"
@@ -118,6 +142,7 @@ jobs:
           Compress-Archive -Path "dist/AutoDoctorInstaller-$env:VERSION.exe" -DestinationPath $zipFile
 
       - name: Generate SHA256 checksum
+        if: ${{ steps.prerelease.outputs.dryrun != 'true' && steps.check_release.outputs.exists != 'true' }}
         shell: pwsh
         run: |
           $zipFile = "dist/AutoDoctorInstaller-$env:VERSION.zip"
@@ -126,7 +151,7 @@ jobs:
           Write-Host "SHA256: $sha256"
 
       - name: Upload release asset with notes
-        if: ${{ steps.prerelease.outputs.dryrun != 'true' }}
+        if: ${{ steps.prerelease.outputs.dryrun != 'true' && steps.check_release.outputs.exists != 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           files: |
