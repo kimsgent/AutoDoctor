@@ -1,9 +1,17 @@
 # AutoDoctor
 
-[![Docs](https://img.shields.io/badge/docs-projectindexly.com%2Fautodoctor-0A66C2)](./docs/assets/autodoctor-badge-ori.png)
-[![Platform](https://img.shields.io/badge/platform-Windows-0078D6)](https://www.microsoft.com/windows)
-[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE)](https://learn.microsoft.com/powershell/)
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB)](https://www.python.org/downloads/windows/)
+<a href="https://projectindexly.com/autodoctor">
+  <img src="./docs/assets/autodoctor-badge-github.png" width="100">
+</a>
+<a href="https://www.microsoft.com/windows">
+  <img src="https://img.shields.io/badge/platform-Windows-0078D6">
+</a>
+<a href="https://learn.microsoft.com/powershell/">
+  <img src="https://img.shields.io/badge/PowerShell-5.1%2B-5391FE">
+</a>
+<a href="https://www.python.org/downloads/windows/">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB">
+</a>
 
 ![AutoDoctor Banner Placeholder](./docs/assets/autodoctor-banner.png)
 
@@ -14,7 +22,7 @@ AutoDoctor is a Windows diagnostics and remediation tool that combines:
 - a FastAPI service for structured data access
 - a browser dashboard for real-time visualization
 
-Documentation: [projectindexly.com/autodoctor](https://projectindexly.com/autodoctor)
+Documentation: [projectindexly.com/autodoctor](https://projectindexly.com/en/documentation/autodoctor/)
 Project Indexly (main repo): [github.com/kimsgent/project-indexly](https://github.com/kimsgent/project-indexly)
 
 ## Table of Contents
@@ -172,8 +180,8 @@ Installer script:
 
 ## Documentation
 
-- Docs home: [projectindexly.com/autodoctor](https://projectindexly.com/autodoctor)
-- Local docs source: [`content/docs/autodoctor/`](./content/docs/autodoctor/)
+- Docs home: [projectindexly.com/autodoctor](https://projectindexly.com/en/documentation/autodoctor/)
+- Local docs source: [`docs/content/autodoctor`](./docs/content/)
 
 Suggested reading order:
 
