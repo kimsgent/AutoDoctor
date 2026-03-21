@@ -36,17 +36,27 @@ jobs:
         shell: pwsh
         run: |
           if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
-            "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_ENV
+            # Use GitHub Actions input
+            $versionInput = "${{ github.event.inputs.version }}"
+            if (-not $versionInput) {
+              Write-Host "No version input provided, using dry-run default"
+              $versionInput = "v0.0.0-test"
+            }
           } else {
-            "VERSION=$env:GITHUB_REF_NAME" >> $env:GITHUB_ENV
+            # Use tag name from push
+            $versionInput = $env:GITHUB_REF_NAME
           }
 
-          if (-not $env:VERSION) {
+          if (-not $versionInput) {
             Write-Error "VERSION is not set"
             exit 1
           }
 
-          Write-Host "Using VERSION=$env:VERSION"
+          # export VERSION for subsequent steps
+          "VERSION=$versionInput" >> $env:GITHUB_ENV
+
+          # use in current step too
+          Write-Host "Using VERSION=$versionInput"
 
       - name: Determine prerelease and dry-run
         id: prerelease
