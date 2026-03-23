@@ -124,25 +124,29 @@ VALUES
         # Derive system snapshot metrics
         # -----------------------------
 
-        $cpuLoad = if ($TelemetryData.System.CPU.CurrentLoad) {
+        $cpuLoad = if ($null -ne $TelemetryData.System.CPU.CurrentLoad) {
             [math]::Round($TelemetryData.System.CPU.CurrentLoad, 2)
-        }
-        else { $null }
+        } else { $null }
 
-        $memFree = if ($TelemetryData.System.Memory.FreeGB) {
+        $memFree = if ($null -ne $TelemetryData.System.Memory.FreeGB) {
             [math]::Round($TelemetryData.System.Memory.FreeGB, 2)
-        }
-        else { $null }
+        } else { $null }
 
-        $diskFree = if ($TelemetryData.System.Disk) {
-            [math]::Round(($TelemetryData.System.Disk | Measure-Object FreeSpaceGB -Sum).Sum, 2)
-        }
-        else { $null }
+        $diskFree = if ($null -ne $TelemetryData.System.Disk) {
+            [math]::Round(
+                ($TelemetryData.System.Disk | Measure-Object FreeSpaceGB -Sum).Sum,
+                2
+            )
+        } else { $null }
 
         $netLatency = 0
         $netModule = $ModuleResults | Where-Object { $_.Module -eq "Network Analysis" }
 
-        if ($netModule -and $netModule.Result -and $netModule.Result.Connectivity) {
+        if ($null -ne $netModule -and
+            $null -ne $netModule.Result -and
+            $null -ne $netModule.Result.Connectivity -and
+            $null -ne $netModule.Result.Connectivity.AvgLatencyMS) {
+
             $netLatency = $netModule.Result.Connectivity.AvgLatencyMS
         }
 
