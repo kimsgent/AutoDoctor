@@ -1,3 +1,35 @@
+"""
+AutoDoctor Windows Service Module
+---------------------------------
+
+This module implements the AutoDoctor Telemetry API as a Windows Service.
+
+Responsibilities:
+- Resolves runtime environment (paths, config, execution mode)
+- Launches and supervises the AutoDoctor API process
+- Ensures the API runs continuously in the background
+- Handles clean startup, shutdown, and failure scenarios
+- Provides logging for diagnostics and troubleshooting
+
+Service Behavior:
+- Starts the AutoDoctor API using either a bundled executable or system Python
+- Runs silently in the background without user interaction
+- Terminates the child process gracefully on service stop
+- Falls back safely if configuration or runtime paths are missing
+
+Operational Impact:
+- Required for AutoDoctor monitoring, telemetry collection, and API access
+- If stopped or disabled, no system metrics will be collected or exposed
+- Dependent tools, dashboards, or integrations relying on AutoDoctor will fail
+
+Configuration:
+- Controlled via environment variables and autodoctor.ini
+- Supports "bundled" and "system_python" execution modes
+
+Logs:
+- Written to: <AUTO_DOCTOR_HOME>/logs/autodoctor_api.log
+"""
+
 import win32serviceutil
 import win32service
 import win32event
@@ -82,7 +114,13 @@ def resolve_service_mode(config_ini_path):
 class AutoDoctorAPIService(win32serviceutil.ServiceFramework):
     _svc_name_ = "AutoDoctorAPI"
     _svc_display_name_ = "AutoDoctor Telemetry API"
-    _svc_description_ = "AutoDoctor monitoring API service"
+    _svc_description_ = (
+        "Hosts the AutoDoctor Telemetry API, enabling continuous system monitoring, "
+        "diagnostics collection, and external health queries. The service launches and "
+        "manages the AutoDoctor API process in the background. If this service is stopped "
+        "or disabled, AutoDoctor will be unable to collect or expose system telemetry, "
+        "and any dependent monitoring, automation, or integration features may fail."
+    )
 
     def __init__(self, args):
         win32serviceutil.ServiceFramework.__init__(self, args)
@@ -161,7 +199,7 @@ class AutoDoctorAPIService(win32serviceutil.ServiceFramework):
             # ------------------------------------------------
             # Start API process
             # ------------------------------------------------
-
+            assert launch_cmd is not None
             self.process = subprocess.Popen(
                 launch_cmd,
                 cwd=script_dir,
