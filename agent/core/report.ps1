@@ -24,14 +24,12 @@ function Get-SafeModuleResult {
             foreach ($prop in $PropertyPath -split "\.") {
                 if ($value -and $value.PSObject.Properties.Match($prop)) {
                     $value = $value.$prop
-                }
-                else {
+                } else {
                     return $null
                 }
             }
             return $value
-        }
-        catch { return $null }
+        } catch { return $null }
     }
 
     return $mod.Result
@@ -127,8 +125,8 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
 </div>
 </div>
 "@
-    }
-    else { $memChart = "" }
+    } else { $memChart = "" }
+
 
     # -----------------------------
     # CPU PANEL
@@ -136,6 +134,16 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
     $cpuModule = $ModuleResults | Where-Object { $_.Module -eq "CPU Analysis" }
 
     if ($cpuModule) {
+
+        # Fallback to WMI if CurrentCPULoadPercent is null
+        if ($null -eq $cpuModule.Result.CurrentCPULoadPercent) {
+            try {
+                $cpuModule.Result.CurrentCPULoadPercent = (Get-CimInstance Win32_Processor).LoadPercentage
+            } catch {
+                Write-Warning "CPU fallback via WMI failed: $_"
+                $cpuModule.Result.CurrentCPULoadPercent = 0
+            }
+        }
 
         $cpuPercent = $cpuModule.Result.CurrentCPULoadPercent
 
@@ -150,37 +158,53 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
 <div class='card'>
 <h2>CPU Utilization</h2>
 <div class='cpudonut' style='--cpu:${cpuPercent}%'>
-${cpuPercent}%
+        ${cpuPercent}%
 </div>
 </div>
 <div class='card'>
 <h2>Top CPU Processes</h2>
-$cpuChartData
+        $cpuChartData
 </div>
 "@
 
-    }
-    else { $cpuChart = "" }
+    } else { $cpuChart = "" }
 
     # -----------------------------
     # DISK PANEL
     # -----------------------------
     $diskModule = $ModuleResults | Where-Object { $_.Module -eq "Disk Analysis" }
     if ($diskModule) {
+
+        # Fallback to WMI if DiskIOSummary is null or empty
+        if (-not $diskModule.Result.DiskIOSummary) {
+            try {
+                $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+                $diskModule.Result.DiskIOSummary = $disks | ForEach-Object {
+                    [PSCustomObject]@{
+                        Disk        = $_.DeviceID
+                        PercentBusy = 0  # fallback, could be enhanced later
+                    }
+                }
+            } catch {
+                Write-Warning "Disk fallback via WMI failed: $_"
+                $diskModule.Result.DiskIOSummary = @()
+            }
+        }
+
         $diskChartData = @()
         if ($diskModule.Result.DiskIOSummary) {
             $diskChartData += ($diskModule.Result.DiskIOSummary | ForEach-Object {
                     "<p>$($_.Disk): $($_.PercentBusy)% busy</p>"
                 }) -join "`n"
         }
+
         $diskChart = @"
 <div class='card full'>
 <h2>Disk IO Activity</h2>
-$diskChartData
+        $diskChartData
 </div>
 "@
-    }
-    else { $diskChart = "" }
+    } else { $diskChart = "" }
 
     # -----------------------------
     # JOIN MODULE SECTIONS
@@ -373,8 +397,7 @@ function New-AutoDoctorJsonReport {
         $cpuCounters.CounterSamples | Where-Object { $_.InstanceName -ne "_Total" } | ForEach-Object {
             [PSCustomObject]@{ Core = $_.InstanceName; PercentUsed = [math]::Round($_.CookedValue, 1) }
         }
-    }
-    else { @() }
+    } else { @() }
 
     # -------------------------
     # Disk IO
@@ -384,8 +407,7 @@ function New-AutoDoctorJsonReport {
         $diskIO.CounterSamples | ForEach-Object {
             [PSCustomObject]@{ Disk = $_.InstanceName; PercentBusy = [math]::Round($_.CookedValue, 2) }
         }
-    }
-    else { @() }
+    } else { @() }
 
     # -------------------------
     # Root & Remediation
@@ -396,8 +418,7 @@ function New-AutoDoctorJsonReport {
     # Ensure content is human-readable
     $rootCauseAnalysis = if ($rootResult -and $rootResult.Result) {
         if ($rootResult.Result.Summary) { $rootResult.Result.Summary } else { "No major issues detected" }
-    }
-    else {
+    } else {
         "No Root Cause Analysis executed"
     }
 
@@ -419,8 +440,7 @@ function New-AutoDoctorJsonReport {
             Numeric = [int]$score
             Display = $display
         }
-    }
-    else {
+    } else {
         [PSCustomObject]@{
             Numeric = 0
             Display = "Health score not available"
@@ -434,8 +454,7 @@ function New-AutoDoctorJsonReport {
         [PSCustomObject]@{
             ScriptRuntimeSeconds = $engineRuntime.Result.ScriptRuntimeSeconds
         }
-    }
-    else {
+    } else {
         [PSCustomObject]@{
             ScriptRuntimeSeconds = "N/A"
         }
@@ -443,8 +462,7 @@ function New-AutoDoctorJsonReport {
 
     $automaticRemediation = if ($remediationResult) {
         if ($remediationResult.Result) { $remediationResult.Result } else { "No remediation actions executed" }
-    }
-    else { "No remediation module executed" }
+    } else { "No remediation module executed" }
 
     # -------------------------
     # Build JSON object
