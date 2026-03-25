@@ -390,24 +390,84 @@ function New-AutoDoctorJsonReport {
     $memUsedPercent = if ($totalMem -and $freeMem) { [math]::Round((($totalMem - $freeMem) / $totalMem) * 100, 1) } else { 0 }
 
     # -------------------------
-    # CPU per-core
+    # CPU per-core (with fallback)
     # -------------------------
-    $cpuCounters = Get-Counter "\Processor(*)\% Processor Time" -ErrorAction SilentlyContinue
-    $cpuCoreData = if ($cpuCounters) {
-        $cpuCounters.CounterSamples | Where-Object { $_.InstanceName -ne "_Total" } | ForEach-Object {
-            [PSCustomObject]@{ Core = $_.InstanceName; PercentUsed = [math]::Round($_.CookedValue, 1) }
+    $cpuCoreData = @()
+
+    try {
+        $cpuCounters = Get-Counter "\Processor(*)\% Processor Time" -ErrorAction Stop
+
+        if ($cpuCounters) {
+            $cpuCoreData = $cpuCounters.CounterSamples |
+                Where-Object { $_.InstanceName -ne "_Total" } |
+                ForEach-Object {
+                    [PSCustomObject]@{
+                        Core        = $_.InstanceName
+                        PercentUsed = [math]::Round($_.CookedValue, 1)
+                    }
+                }
         }
-    } else { @() }
+    }
+    catch {
+        Write-Warning "CPU per-core PerfCounter failed, fallback to WMI"
+
+        try {
+            $cpuPerf = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor
+
+            if ($cpuPerf) {
+                $cpuCoreData = $cpuPerf |
+                    Where-Object { $_.Name -ne "_Total" } |
+                    ForEach-Object {
+                        [PSCustomObject]@{
+                            Core        = $_.Name
+                            PercentUsed = [math]::Round($_.PercentProcessorTime, 1)
+                        }
+                    }
+            }
+        }
+        catch {
+            Write-Warning "CPU per-core WMI fallback failed"
+            $cpuCoreData = @()
+        }
+    }
 
     # -------------------------
-    # Disk IO
+    # Disk IO (with fallback)
     # -------------------------
-    $diskIO = Get-Counter "\PhysicalDisk(*)\% Disk Time" -ErrorAction SilentlyContinue
-    $diskIOSummaryData = if ($diskIO) {
-        $diskIO.CounterSamples | ForEach-Object {
-            [PSCustomObject]@{ Disk = $_.InstanceName; PercentBusy = [math]::Round($_.CookedValue, 2) }
+    $diskIOSummaryData = @()
+
+    try {
+        $diskIO = Get-Counter "\PhysicalDisk(*)\% Disk Time" -ErrorAction Stop
+
+        if ($diskIO) {
+            $diskIOSummaryData = $diskIO.CounterSamples | ForEach-Object {
+                [PSCustomObject]@{
+                    Disk        = $_.InstanceName
+                    PercentBusy = [math]::Round($_.CookedValue, 2)
+                }
+            }
         }
-    } else { @() }
+    }
+    catch {
+        Write-Warning "Disk PerfCounter failed, fallback to WMI"
+
+        try {
+            $diskPerf = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk
+
+            if ($diskPerf) {
+                $diskIOSummaryData = $diskPerf | Where-Object { $_.Name -ne "_Total" } | ForEach-Object {
+                    [PSCustomObject]@{
+                        Disk        = $_.Name
+                        PercentBusy = [math]::Round($_.PercentDiskTime, 2)
+                    }
+                }
+            }
+        }
+        catch {
+            Write-Warning "Disk WMI fallback failed"
+            $diskIOSummaryData = @()
+        }
+    }
 
     # -------------------------
     # Root & Remediation
