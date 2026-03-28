@@ -2,6 +2,20 @@
   "project": "AutoDoctor",
   "versions": [
     {
+      "version": "1.0.1",
+      "date": "2026-03-28",
+      "changes": [
+        "feat(telemetry): add robust fallback logic for CPU, memory, disk, and disk I/O metrics",
+        "feat(reports): add robust fallback handling for system metrics in JSON and report generation",
+        "fix(core): add null-safe handling for system snapshot metrics in telemetry database writes",
+        "fix(service): resolve Pylance type warning for subprocess launch command",
+        "fix(workflow): improve release detection and fix release notes generation",
+        "chore(ci): expose release workflow outputs and stabilize version detection",
+        "chore(repo): add CODEOWNERS and PR templates for enforced reviews and standardized workflow"
+      ]
+    },
+    
+    {
       "version": "1.0.0",
       "date": "2026-03-16",
       "changes": [
