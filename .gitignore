@@ -93,6 +93,9 @@ htmlcov/
 .venv/
 venv/
 env/
+.direnv/
+.envrc
+.python-version
 
 # -----------------------------
 
