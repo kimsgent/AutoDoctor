@@ -126,6 +126,10 @@ var
   ExistingInstallPath: string;
   UpdateCacheLatestVersion: string;
   UpdateCacheAvailable: Boolean;
+  UpgradeOptionVisible: Boolean;
+  UpgradeOptionIndex: Integer;
+  RepairOptionIndex: Integer;
+  RemoveOptionIndex: Integer;
   InstallModePage: TInputOptionWizardPage;
   DisclaimerPage: TWizardPage;
 
@@ -144,6 +148,25 @@ begin
   Result :=
     RegQueryStringValue(HKLM64, 'Software\AutoDoctor', 'InstallPath', InstallPath) or
     RegQueryStringValue(HKLM64, 'Software\AutoDoctor', 'InstallRoot', InstallPath);
+end;
+
+function IsValidInstalledLayout(const InstallPath: string): Boolean;
+var
+  BasePath: string;
+begin
+  if InstallPath = '' then
+  begin
+    Result := False;
+    exit;
+  end;
+
+  BasePath := AddBackslash(InstallPath);
+
+  Result :=
+    DirExists(InstallPath) and
+    FileExists(BasePath + 'agent\AutoDoctor.ps1') and
+    FileExists(BasePath + 'VERSION') and
+    FileExists(BasePath + 'unins000.exe');
 end;
 
 function GetUpdateCachePath(): string;
@@ -246,14 +269,16 @@ end;
 
 procedure DetectExistingInstall();
 begin
-  ExistingInstallDetected := RegKeyExists(HKLM64, 'Software\AutoDoctor');
+  ExistingInstallDetected := False;
   ExistingInstallVersion := '';
   ExistingInstallPath := '';
 
-  if ExistingInstallDetected then
+  if RegKeyExists(HKLM64, 'Software\AutoDoctor') then
   begin
     RegQueryStringValue(HKLM64, 'Software\AutoDoctor', 'Version', ExistingInstallVersion);
     GetRegistryInstallPath(ExistingInstallPath);
+
+    ExistingInstallDetected := IsValidInstalledLayout(ExistingInstallPath);
   end;
 
   if ExistingInstallPath = '' then
@@ -468,22 +493,22 @@ end;
 
 function GetSelectedInstallAction(): Integer;
 begin
-  Result := INSTALL_ACTION_UPGRADE;
+  Result := INSTALL_ACTION_REPAIR;
 
   if InstallModePage = nil then
   begin
     exit;
   end;
 
-  if InstallModePage.Values[INSTALL_ACTION_REPAIR] then
+  if (RemoveOptionIndex >= 0) and InstallModePage.Values[RemoveOptionIndex] then
   begin
-    Result := INSTALL_ACTION_REPAIR;
+    Result := INSTALL_ACTION_REMOVE;
     exit;
   end;
 
-  if InstallModePage.Values[INSTALL_ACTION_REMOVE] then
+  if UpgradeOptionVisible and (UpgradeOptionIndex >= 0) and InstallModePage.Values[UpgradeOptionIndex] then
   begin
-    Result := INSTALL_ACTION_REMOVE;
+    Result := INSTALL_ACTION_UPGRADE;
     exit;
   end;
 end;
@@ -520,6 +545,7 @@ var
   InstalledInfoText: string;
   InstallInfoLabel: TNewStaticText;
   UpdateNoticeLabel: TNewStaticText;
+  NextOptionIndex: Integer;
 begin
   DetectExistingInstall();
 
@@ -549,6 +575,10 @@ begin
   DisclaimerText.WordWrap := True;
 
   InstallModePage := nil;
+  UpgradeOptionVisible := False;
+  UpgradeOptionIndex := -1;
+  RepairOptionIndex := -1;
+  RemoveOptionIndex := -1;
 
   if ExistingInstallDetected then
   begin
@@ -561,10 +591,31 @@ begin
       False
     );
 
-    InstallModePage.Add('Upgrade (default) - install new version files');
+    UpgradeOptionVisible := UpdateCacheAvailable and (UpdateCacheLatestVersion <> '');
+    NextOptionIndex := 0;
+
+    if UpgradeOptionVisible then
+    begin
+      UpgradeOptionIndex := NextOptionIndex;
+      InstallModePage.Add('Upgrade (default) - install new version files');
+      NextOptionIndex := NextOptionIndex + 1;
+    end;
+
+    RepairOptionIndex := NextOptionIndex;
     InstallModePage.Add('Repair - reinstall this version');
+    NextOptionIndex := NextOptionIndex + 1;
+
+    RemoveOptionIndex := NextOptionIndex;
     InstallModePage.Add('Remove - uninstall AutoDoctor and exit setup');
-    InstallModePage.Values[INSTALL_ACTION_UPGRADE] := True;
+
+    if UpgradeOptionVisible then
+    begin
+      InstallModePage.Values[UpgradeOptionIndex] := True;
+    end
+    else
+    begin
+      InstallModePage.Values[RepairOptionIndex] := True;
+    end;
 
     InstalledInfoText := 'Detected installation';
     if ExistingInstallVersion <> '' then
@@ -587,7 +638,7 @@ begin
     InstallInfoLabel.Height := ScaleY(42);
     InstallInfoLabel.WordWrap := True;
 
-    if UpdateCacheAvailable and (UpdateCacheLatestVersion <> '') then
+    if UpgradeOptionVisible then
     begin
       UpdateNoticeLabel := TNewStaticText.Create(InstallModePage);
       UpdateNoticeLabel.Parent := InstallModePage.Surface;
