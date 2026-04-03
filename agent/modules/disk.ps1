@@ -16,17 +16,52 @@ Register-AutoDoctorModule -Name "Disk Analysis" -Execute {
         Get-CimInstance -Namespace root/wmi -ClassName MSStorageDriver_FailurePredictStatus
     } | Select-Object InstanceName, PredictFailure
 
-    # --- Disk IO ---
-    $diskIO = Invoke-Safe { Get-Counter "\PhysicalDisk(*)\% Disk Time" }
+    # --- Disk IO (English PerfCounter -> localized PerfCounter -> WMI) ---
+    $diskCounterPath = "\PhysicalDisk(*)\% Disk Time"
+    $diskIO = $null
+    $diskPerfFallback = $null
 
-    $diskIOSummary = if ($diskIO) {
-        $diskIO.CounterSamples | ForEach-Object {
+    try {
+        $diskIO = Get-Counter -Counter $diskCounterPath -ErrorAction Stop
+    }
+    catch {
+        $localizedDiskPath = Get-LocalizedCounterPath -CanonicalName "PhysicalDisk" -CounterPath $diskCounterPath
+
+        if ($localizedDiskPath) {
+            try {
+                $diskIO = Get-Counter -Counter $localizedDiskPath -ErrorAction Stop
+            }
+            catch {
+                $diskIO = $null
+            }
+        }
+
+        if ($null -eq $diskIO) {
+            Write-Warning "PerfCounter failed, fallback to WMI"
+            $diskPerfFallback = Invoke-Safe {
+                Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -ErrorAction Stop
+            }
+        }
+    }
+
+    $diskIOSummary = @()
+
+    if ($diskIO) {
+        $diskIOSummary = $diskIO.CounterSamples | ForEach-Object {
             [PSCustomObject]@{
                 Disk        = $_.InstanceName
                 PercentBusy = [math]::Round($_.CookedValue,2)
             }
         }
-    } else { @() }
+    }
+    elseif ($diskPerfFallback) {
+        $diskIOSummary = $diskPerfFallback | Where-Object { $_.Name -ne "_Total" } | ForEach-Object {
+            [PSCustomObject]@{
+                Disk        = $_.Name
+                PercentBusy = [math]::Round($_.PercentDiskTime,2)
+            }
+        }
+    }
 
     $diskBusy = $diskIOSummary | Where-Object { $_.PercentBusy -gt 80 }
 

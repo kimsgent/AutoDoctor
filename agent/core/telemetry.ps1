@@ -42,16 +42,38 @@ function Get-SystemTelemetry {
         $environmentType = if ($isVM) { "VirtualMachine" } else { "PhysicalMachine" }
 
         # -----------------------------
-        # CPU fallback
+        # CPU fallback: English PerfCounter -> localized PerfCounter -> WMI
         # -----------------------------
         $cpuLoad = $null
+        $cpuCounterPath = "\Processor(_Total)\% Processor Time"
+
         try {
-            $cpuLoad = (Get-Counter "\Processor(_Total)\% Processor Time").CounterSamples[0].CookedValue
+            $cpuCounter = Get-Counter -Counter $cpuCounterPath -ErrorAction Stop
+            $cpuLoad = $cpuCounter.CounterSamples[0].CookedValue
         }
         catch {
-            try {
-                $cpuLoad = $cpu.LoadPercentage
-            } catch { $cpuLoad = $null }
+            $localizedCpuPath = Get-LocalizedCounterPath -CanonicalName "Processor" -CounterPath $cpuCounterPath
+
+            if ($localizedCpuPath) {
+                try {
+                    $localizedCpuCounter = Get-Counter -Counter $localizedCpuPath -ErrorAction Stop
+                    $cpuLoad = $localizedCpuCounter.CounterSamples[0].CookedValue
+                }
+                catch {
+                    $cpuLoad = $null
+                }
+            }
+
+            if ($null -eq $cpuLoad) {
+                Write-Warning "PerfCounter failed, fallback to WMI"
+
+                try {
+                    $cpuLoad = $cpu.LoadPercentage
+                }
+                catch {
+                    $cpuLoad = $null
+                }
+            }
         }
 
         # -----------------------------
