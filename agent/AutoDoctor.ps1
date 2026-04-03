@@ -83,6 +83,13 @@ if (-not $Global:AutoDoctorLogFile) {
 . "$PSScriptRoot\core\localization.ps1"
 Initialize-AutoDoctorLocalization | Out-Null
 
+. "$PSScriptRoot\core\update.ps1"
+$Global:AutoDoctorUpdateInfo = Get-AutoDoctorUpdateInfo
+
+if ($Global:AutoDoctorUpdateInfo -and $Global:AutoDoctorUpdateInfo.UpdateAvailable -and $Global:AutoDoctorUpdateInfo.LatestVersion) {
+    Write-Host ("Update available: v{0} (current: v{1})" -f $Global:AutoDoctorUpdateInfo.LatestVersion, $Global:AutoDoctorUpdateInfo.CurrentVersion) -ForegroundColor Red
+}
+
 # -----------------------------------------------------------------------------
 # DATABASE INITIALIZATION
 # -----------------------------------------------------------------------------

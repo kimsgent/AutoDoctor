@@ -50,6 +50,7 @@ else {
 $Global:AutoDoctorPaths = @{
     Root        = $Global:AutoDoctorRoot
     DB          = Join-Path $Global:AutoDoctorRoot "db"
+    Cache       = Join-Path $Global:AutoDoctorRoot "cache"
     Reports     = Join-Path $Global:AutoDoctorRoot "reports"
     Telemetry   = Join-Path $Global:AutoDoctorRoot "telemetry"
     Diagnostics = Join-Path $Global:AutoDoctorRoot "diagnostics"
