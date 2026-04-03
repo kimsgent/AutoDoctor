@@ -38,23 +38,24 @@ Register-AutoDoctorModule -Name "Windows Patch History" -Execute {
                 Description = [string]$entry.Description
                 KB          = $kb
                 InstalledOn = [datetime]$entry.Date
-                Result      = [string]$entry.ResultCode
-                Operation   = [string]$entry.Operation
+                Result      = [int]$entry.ResultCode
+                Operation   = [int]$entry.Operation
             }
         }
     )
 
-    # Keep only Windows OS updates to exclude third-party content.
-    $windowsOnlyPattern = '(?i)(Microsoft\s+Windows|Windows(\s+Server)?|Windows\s?(10|11))'
+    # Keep only OS/security-style updates and exclude product/app updates.
     $securityIncludePattern = '(?i)(Security|Sicherheits|Critical|Kritisch|Cumulative|Kumulativ)'
-    $securityExcludePattern = '(?i)(Driver|Treiber|Defender|Security\s+Intelligence|Definition\s+Update|Definitionsupdate)'
+    $securityExcludePattern = '(?i)(Driver|Treiber|Defender|Security\s+Intelligence|Definition\s+Update|Definitionsupdate|Visual\s+Studio|Office|Microsoft\s+365|SQL\s+Server|Edge|Chrome|Firefox|Adobe)'
     $featureIncludePattern = '(?i)(Feature\s+update|Funktionsupdate|Windows\s?(10|11).*(version|Version|H2|H1|LTSC))'
     $featureExcludePattern = '(?i)(Cumulative|Kumulativ|Security|Sicherheits|Preview|Vorschau|Driver|Treiber|Defender|Definition\s+Update|Definitionsupdate)'
+    $windowsOnlyPattern = '(?i)(Microsoft\s+Windows|Windows(\s+Server)?|Windows\s?(10|11))'
 
     $securityUpdates = @(
         $normalizedHistory |
             Where-Object {
-                $_.Title -match $windowsOnlyPattern -and
+                $_.Operation -eq 1 -and
+                $_.Result -eq 2 -and
                 $_.Title -match $securityIncludePattern -and
                 $_.Title -notmatch $securityExcludePattern -and
                 $null -ne $_.KB
@@ -66,6 +67,8 @@ Register-AutoDoctorModule -Name "Windows Patch History" -Execute {
     $featureUpdates = @(
         $normalizedHistory |
             Where-Object {
+                $_.Operation -eq 1 -and
+                $_.Result -eq 2 -and
                 $_.Title -match $windowsOnlyPattern -and
                 $_.Title -match $featureIncludePattern -and
                 $_.Title -notmatch $featureExcludePattern
