@@ -275,6 +275,12 @@ foreach ($mod in $moduleResults) {
         }
 
         # -----------------------------
+        "Windows Patch History" {
+            $Sections += Add-Section "Recent Security/Critical/Cumulative Updates" $mod.Result.SecurityUpdates
+            $Sections += Add-Section "Recent Feature Updates" $mod.Result.FeatureUpdates
+        }
+
+        # -----------------------------
         "Driver Inventory" {
             $Sections += Add-Section "Driver Inventory" $mod.Result
         }
