@@ -243,6 +243,25 @@ Generated: $reportTime
 </div>
 "@
 
+    $updateFooterHTML = ""
+
+    if ($Global:AutoDoctorUpdateInfo -and $Global:AutoDoctorUpdateInfo.UpdateAvailable -and $Global:AutoDoctorUpdateInfo.LatestVersion) {
+        $latestVersion = [string]$Global:AutoDoctorUpdateInfo.LatestVersion
+        $currentVersion = [string]$Global:AutoDoctorUpdateInfo.CurrentVersion
+        $repoUrl = [string]$Global:AutoDoctorUpdateInfo.RepoUrl
+
+        if (-not $repoUrl) {
+            $repoUrl = "https://github.com/kimsgent/autodoctor"
+        }
+
+        $updateFooterHTML = @"
+<div style='text-align:center; margin-top:10px; color:#cc3300; font-size:14px;'>
+  Update available: v$latestVersion (current: v$currentVersion) —
+  <a href='$repoUrl' target='_blank'>Download here</a>
+</div>
+"@
+    }
+
     $footerHTML = @"
 <hr style='margin-top:60px;'>
 
@@ -272,6 +291,10 @@ github.com/kimsgent/autodoctor
 </a>
 
 <br><br>
+
+$updateFooterHTML
+
+<br>
 
 <span class='disclaimer'>
 Disclaimer: AutoDoctor diagnostics are informational and provided without warranty.
@@ -394,22 +417,37 @@ function New-AutoDoctorJsonReport {
     # -------------------------
     $cpuCoreData = @()
 
-    try {
-        $cpuCounters = Get-Counter "\Processor(*)\% Processor Time" -ErrorAction Stop
+    $cpuCounterPath = "\Processor(*)\% Processor Time"
+    $cpuCounters = $null
 
-        if ($cpuCounters) {
-            $cpuCoreData = $cpuCounters.CounterSamples |
-                Where-Object { $_.InstanceName -ne "_Total" } |
-                ForEach-Object {
-                    [PSCustomObject]@{
-                        Core        = $_.InstanceName
-                        PercentUsed = [math]::Round($_.CookedValue, 1)
-                    }
-                }
-        }
+    try {
+        $cpuCounters = Get-Counter -Counter $cpuCounterPath -ErrorAction Stop
     }
     catch {
-        Write-Warning "CPU per-core PerfCounter failed, fallback to WMI"
+        $localizedCpuPath = Get-LocalizedCounterPath -CanonicalName "Processor" -CounterPath $cpuCounterPath
+
+        if ($localizedCpuPath) {
+            try {
+                $cpuCounters = Get-Counter -Counter $localizedCpuPath -ErrorAction Stop
+            }
+            catch {
+                $cpuCounters = $null
+            }
+        }
+    }
+
+    if ($cpuCounters) {
+        $cpuCoreData = $cpuCounters.CounterSamples |
+            Where-Object { $_.InstanceName -ne "_Total" } |
+            ForEach-Object {
+                [PSCustomObject]@{
+                    Core        = $_.InstanceName
+                    PercentUsed = [math]::Round($_.CookedValue, 1)
+                }
+            }
+    }
+    else {
+        Write-Warning "PerfCounter failed, fallback to WMI"
 
         try {
             $cpuPerf = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor
@@ -436,20 +474,35 @@ function New-AutoDoctorJsonReport {
     # -------------------------
     $diskIOSummaryData = @()
 
-    try {
-        $diskIO = Get-Counter "\PhysicalDisk(*)\% Disk Time" -ErrorAction Stop
+    $diskCounterPath = "\PhysicalDisk(*)\% Disk Time"
+    $diskIO = $null
 
-        if ($diskIO) {
-            $diskIOSummaryData = $diskIO.CounterSamples | ForEach-Object {
-                [PSCustomObject]@{
-                    Disk        = $_.InstanceName
-                    PercentBusy = [math]::Round($_.CookedValue, 2)
-                }
+    try {
+        $diskIO = Get-Counter -Counter $diskCounterPath -ErrorAction Stop
+    }
+    catch {
+        $localizedDiskPath = Get-LocalizedCounterPath -CanonicalName "PhysicalDisk" -CounterPath $diskCounterPath
+
+        if ($localizedDiskPath) {
+            try {
+                $diskIO = Get-Counter -Counter $localizedDiskPath -ErrorAction Stop
+            }
+            catch {
+                $diskIO = $null
             }
         }
     }
-    catch {
-        Write-Warning "Disk PerfCounter failed, fallback to WMI"
+
+    if ($diskIO) {
+        $diskIOSummaryData = $diskIO.CounterSamples | ForEach-Object {
+            [PSCustomObject]@{
+                Disk        = $_.InstanceName
+                PercentBusy = [math]::Round($_.CookedValue, 2)
+            }
+        }
+    }
+    else {
+        Write-Warning "PerfCounter failed, fallback to WMI"
 
         try {
             $diskPerf = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk
@@ -553,6 +606,7 @@ function New-AutoDoctorJsonReport {
         StartupPrograms      = ($ModuleResults | Where-Object Module -eq "Startup Analysis").Result.StartupPrograms
         InstalledSoftware    = ($ModuleResults | Where-Object Module -eq "Installed Software").Result
         WindowsUpdate        = ($ModuleResults | Where-Object Module -eq "Windows Update Status").Result
+        WindowsPatchHistory  = ($ModuleResults | Where-Object Module -eq "Windows Patch History").Result
         Drivers              = ($ModuleResults | Where-Object Module -eq "Driver Inventory").Result
         RootCauseAnalysis    = $rootCauseAnalysis
         HealthScore          = $healthScore

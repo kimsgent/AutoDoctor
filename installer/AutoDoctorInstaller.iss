@@ -38,6 +38,7 @@ ChangesEnvironment=yes
 WizardStyle=modern
 SetupIconFile={#SourceRoot}\server\dashboard\favicon.ico
 UninstallDisplayIcon={app}\server\dashboard\favicon.ico
+LicenseFile={#SourceRoot}\LICENSE.txt
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -99,6 +100,8 @@ Filename: "{app}\config\autodoctor.ini"; Section: "Service"; Key: "mode"; String
 [Registry]
 Root: HKLM64; Subkey: "Software\AutoDoctor"; ValueType: string; ValueName: "APIHost"; ValueData: "{#MyAPIHost}"; Flags: uninsdeletevalue
 Root: HKLM64; Subkey: "Software\AutoDoctor"; ValueType: string; ValueName: "APIPort"; ValueData: "{#MyAPIPort}"; Flags: uninsdeletevalue
+Root: HKLM64; Subkey: "Software\AutoDoctor"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletevalue
+Root: HKLM64; Subkey: "Software\AutoDoctor"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletevalue
 Root: HKLM64; Subkey: "Software\AutoDoctor"; ValueType: string; ValueName: "InstallRoot"; ValueData: "{app}"; Flags: uninsdeletevalue
 
 [Icons]
@@ -118,10 +121,170 @@ Filename: "{cmd}"; Parameters: "/c start """" ""{#DashboardURL}"""; Flags: posti
 [Code]
 var
   SystemPythonCommand: string;
+  ExistingInstallDetected: Boolean;
+  ExistingInstallVersion: string;
+  ExistingInstallPath: string;
+  UpdateCacheLatestVersion: string;
+  UpdateCacheAvailable: Boolean;
+  UpgradeOptionVisible: Boolean;
+  UpgradeOptionIndex: Integer;
+  RepairOptionIndex: Integer;
+  RemoveOptionIndex: Integer;
+  InstallModePage: TInputOptionWizardPage;
+  DisclaimerPage: TWizardPage;
+
+const
+  INSTALL_ACTION_UPGRADE = 0;
+  INSTALL_ACTION_REPAIR = 1;
+  INSTALL_ACTION_REMOVE = 2;
 
 function ServiceExists(const ServiceName: string): Boolean;
 begin
   Result := RegKeyExists(HKLM64, 'SYSTEM\CurrentControlSet\Services\' + ServiceName);
+end;
+
+function GetRegistryInstallPath(var InstallPath: string): Boolean;
+begin
+  Result :=
+    RegQueryStringValue(HKLM64, 'Software\AutoDoctor', 'InstallPath', InstallPath) or
+    RegQueryStringValue(HKLM64, 'Software\AutoDoctor', 'InstallRoot', InstallPath);
+end;
+
+function IsValidInstalledLayout(const InstallPath: string): Boolean;
+var
+  BasePath: string;
+begin
+  if InstallPath = '' then
+  begin
+    Result := False;
+    exit;
+  end;
+
+  BasePath := AddBackslash(InstallPath);
+
+  Result :=
+    DirExists(InstallPath) and
+    FileExists(BasePath + 'agent\AutoDoctor.ps1') and
+    FileExists(BasePath + 'VERSION') and
+    FileExists(BasePath + 'unins000.exe');
+end;
+
+function GetUpdateCachePath(): string;
+begin
+  if ExistingInstallPath <> '' then
+  begin
+    Result := AddBackslash(ExistingInstallPath) + 'cache\update_check.json';
+  end
+  else
+  begin
+    Result := ExpandConstant('{commonappdata}\AutoDoctor\cache\update_check.json');
+  end;
+end;
+
+function ExtractJsonStringValueFromLine(const Line: string; const KeyName: string; var ParsedValue: string): Boolean;
+var
+  TrimmedLine: string;
+  LowerLine: string;
+  KeyToken: string;
+  ColonPos: Integer;
+  QuotePos: Integer;
+begin
+  Result := False;
+  ParsedValue := '';
+
+  TrimmedLine := Trim(Line);
+  LowerLine := LowerCase(TrimmedLine);
+  KeyToken := '"' + LowerCase(KeyName) + '"';
+
+  if Pos(KeyToken, LowerLine) = 0 then
+  begin
+    exit;
+  end;
+
+  ColonPos := Pos(':', TrimmedLine);
+  if ColonPos <= 0 then
+  begin
+    exit;
+  end;
+
+  TrimmedLine := Trim(Copy(TrimmedLine, ColonPos + 1, MaxInt));
+  if (Length(TrimmedLine) = 0) or (TrimmedLine[1] <> '"') then
+  begin
+    exit;
+  end;
+
+  Delete(TrimmedLine, 1, 1);
+  QuotePos := Pos('"', TrimmedLine);
+  if QuotePos <= 0 then
+  begin
+    exit;
+  end;
+
+  ParsedValue := Copy(TrimmedLine, 1, QuotePos - 1);
+  Result := True;
+end;
+
+procedure ReadUpdateCacheInfo();
+var
+  CachePath: string;
+  CacheLines: TArrayOfString;
+  I: Integer;
+  Line: string;
+  ParsedVersion: string;
+begin
+  UpdateCacheAvailable := False;
+  UpdateCacheLatestVersion := '';
+
+  CachePath := GetUpdateCachePath();
+  if not FileExists(CachePath) then
+  begin
+    exit;
+  end;
+
+  if not LoadStringsFromFile(CachePath, CacheLines) then
+  begin
+    exit;
+  end;
+
+  for I := 0 to GetArrayLength(CacheLines) - 1 do
+  begin
+    Line := Trim(CacheLines[I]);
+
+    if Pos('"update_available"', LowerCase(Line)) > 0 then
+    begin
+      UpdateCacheAvailable := Pos('true', LowerCase(Line)) > 0;
+    end;
+
+    if ExtractJsonStringValueFromLine(Line, 'latest_version', ParsedVersion) then
+    begin
+      UpdateCacheLatestVersion := ParsedVersion;
+    end;
+  end;
+
+  if not UpdateCacheAvailable then
+  begin
+    UpdateCacheLatestVersion := '';
+  end;
+end;
+
+procedure DetectExistingInstall();
+begin
+  ExistingInstallDetected := False;
+  ExistingInstallVersion := '';
+  ExistingInstallPath := '';
+
+  if RegKeyExists(HKLM64, 'Software\AutoDoctor') then
+  begin
+    RegQueryStringValue(HKLM64, 'Software\AutoDoctor', 'Version', ExistingInstallVersion);
+    GetRegistryInstallPath(ExistingInstallPath);
+
+    ExistingInstallDetected := IsValidInstalledLayout(ExistingInstallPath);
+  end;
+
+  if ExistingInstallPath = '' then
+  begin
+    ExistingInstallPath := ExpandConstant('{commonappdata}\AutoDoctor');
+  end;
 end;
 
 function ResolveSystemPythonCommand(var PythonCommand: string): Boolean;
@@ -324,6 +487,222 @@ begin
         ewWaitUntilTerminated,
         ResultCode
       );
+    end;
+  end;
+end;
+
+function GetSelectedInstallAction(): Integer;
+begin
+  Result := INSTALL_ACTION_REPAIR;
+
+  if InstallModePage = nil then
+  begin
+    exit;
+  end;
+
+  if (RemoveOptionIndex >= 0) and InstallModePage.Values[RemoveOptionIndex] then
+  begin
+    Result := INSTALL_ACTION_REMOVE;
+    exit;
+  end;
+
+  if UpgradeOptionVisible and (UpgradeOptionIndex >= 0) and InstallModePage.Values[UpgradeOptionIndex] then
+  begin
+    Result := INSTALL_ACTION_UPGRADE;
+    exit;
+  end;
+end;
+
+function RunExistingUninstaller(): Boolean;
+var
+  UninstallerExe: string;
+  UninstallArgs: string;
+  ResultCode: Integer;
+begin
+  Result := False;
+
+  UninstallerExe := AddBackslash(ExistingInstallPath) + 'unins000.exe';
+  if not FileExists(UninstallerExe) then
+  begin
+    exit;
+  end;
+
+  if WizardSilent then
+  begin
+    UninstallArgs := '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART';
+  end
+  else
+  begin
+    UninstallArgs := '/SILENT /NORESTART';
+  end;
+
+  Result := Exec(UninstallerExe, UninstallArgs, '', SW_SHOW, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+procedure InitializeWizard();
+var
+  DisclaimerText: TNewStaticText;
+  InstalledInfoText: string;
+  InstallInfoLabel: TNewStaticText;
+  UpdateNoticeLabel: TNewStaticText;
+  NextOptionIndex: Integer;
+begin
+  DetectExistingInstall();
+
+  if ExistingInstallPath <> '' then
+  begin
+    WizardForm.DirEdit.Text := ExistingInstallPath;
+  end;
+
+  ReadUpdateCacheInfo();
+
+  DisclaimerPage := CreateCustomPage(
+    wpLicense,
+    'Disclaimer',
+    'Review the AutoDoctor diagnostic disclaimer before continuing.'
+  );
+
+  DisclaimerText := TNewStaticText.Create(DisclaimerPage);
+  DisclaimerText.Parent := DisclaimerPage.Surface;
+  DisclaimerText.Caption :=
+    'Disclaimer:'#13#10 +
+    'AutoDoctor diagnostics are informational and provided without warranty.';
+  DisclaimerText.Top := ScaleY(12);
+  DisclaimerText.Left := ScaleX(0);
+  DisclaimerText.Width := DisclaimerPage.SurfaceWidth;
+  DisclaimerText.AutoSize := False;
+  DisclaimerText.Height := ScaleY(56);
+  DisclaimerText.WordWrap := True;
+
+  InstallModePage := nil;
+  UpgradeOptionVisible := False;
+  UpgradeOptionIndex := -1;
+  RepairOptionIndex := -1;
+  RemoveOptionIndex := -1;
+
+  if ExistingInstallDetected then
+  begin
+    InstallModePage := CreateInputOptionPage(
+      DisclaimerPage.ID,
+      'Existing Installation Detected',
+      'Choose how setup should proceed',
+      'AutoDoctor is already installed on this machine.',
+      True,
+      False
+    );
+
+    UpgradeOptionVisible := UpdateCacheAvailable and (UpdateCacheLatestVersion <> '');
+    NextOptionIndex := 0;
+
+    if UpgradeOptionVisible then
+    begin
+      UpgradeOptionIndex := NextOptionIndex;
+      InstallModePage.Add('Upgrade (default) - install new version files');
+      NextOptionIndex := NextOptionIndex + 1;
+    end;
+
+    RepairOptionIndex := NextOptionIndex;
+    InstallModePage.Add('Repair - reinstall this version');
+    NextOptionIndex := NextOptionIndex + 1;
+
+    RemoveOptionIndex := NextOptionIndex;
+    InstallModePage.Add('Remove - uninstall AutoDoctor and exit setup');
+
+    if UpgradeOptionVisible then
+    begin
+      InstallModePage.Values[UpgradeOptionIndex] := True;
+    end
+    else
+    begin
+      InstallModePage.Values[RepairOptionIndex] := True;
+    end;
+
+    InstalledInfoText := 'Detected installation';
+    if ExistingInstallVersion <> '' then
+    begin
+      InstalledInfoText := InstalledInfoText + #13#10 + 'Installed version: v' + ExistingInstallVersion;
+    end;
+
+    if ExistingInstallPath <> '' then
+    begin
+      InstalledInfoText := InstalledInfoText + #13#10 + 'Path: ' + ExistingInstallPath;
+    end;
+
+    InstallInfoLabel := TNewStaticText.Create(InstallModePage);
+    InstallInfoLabel.Parent := InstallModePage.Surface;
+    InstallInfoLabel.Caption := InstalledInfoText;
+    InstallInfoLabel.Top := InstallModePage.CheckListBox.Top + InstallModePage.CheckListBox.Height + ScaleY(8);
+    InstallInfoLabel.Left := ScaleX(0);
+    InstallInfoLabel.Width := InstallModePage.SurfaceWidth;
+    InstallInfoLabel.AutoSize := False;
+    InstallInfoLabel.Height := ScaleY(42);
+    InstallInfoLabel.WordWrap := True;
+
+    if UpgradeOptionVisible then
+    begin
+      UpdateNoticeLabel := TNewStaticText.Create(InstallModePage);
+      UpdateNoticeLabel.Parent := InstallModePage.Surface;
+      UpdateNoticeLabel.Caption := 'A newer version (v' + UpdateCacheLatestVersion + ') is available.';
+      UpdateNoticeLabel.Top := InstallInfoLabel.Top + InstallInfoLabel.Height + ScaleY(4);
+      UpdateNoticeLabel.Left := ScaleX(0);
+      UpdateNoticeLabel.Width := InstallModePage.SurfaceWidth;
+      UpdateNoticeLabel.AutoSize := False;
+      UpdateNoticeLabel.Height := ScaleY(24);
+      UpdateNoticeLabel.WordWrap := True;
+    end;
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+
+  if (InstallModePage <> nil) and (CurPageID = InstallModePage.ID) then
+  begin
+    if GetSelectedInstallAction() = INSTALL_ACTION_REMOVE then
+    begin
+      if not RunExistingUninstaller() then
+      begin
+        if not WizardSilent then
+        begin
+          MsgBox(
+            'Unable to run the existing AutoDoctor uninstaller automatically. ' +
+            'Please uninstall AutoDoctor manually and rerun setup.',
+            mbError,
+            MB_OK
+          );
+        end;
+
+        Result := False;
+        exit;
+      end
+      else
+      begin
+        if not WizardSilent then
+        begin
+          MsgBox('AutoDoctor removal completed. Setup will now exit.', mbInformation, MB_OK);
+        end;
+      end;
+
+      Result := False;
+      WizardForm.Close;
+      exit;
+    end;
+  end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+var
+  UpdateLine: string;
+begin
+  if (CurPageID = wpReady) and UpdateCacheAvailable and (UpdateCacheLatestVersion <> '') then
+  begin
+    UpdateLine := 'Update available: v' + UpdateCacheLatestVersion;
+
+    if Pos(UpdateLine, WizardForm.ReadyMemo.Text) = 0 then
+    begin
+      WizardForm.ReadyMemo.Lines.Add('');
+      WizardForm.ReadyMemo.Lines.Add(UpdateLine);
     end;
   end;
 end;
