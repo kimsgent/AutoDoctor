@@ -80,6 +80,9 @@ if (-not $Global:AutoDoctorLogFile) {
     throw "AutoDoctorLogFile path not initialized"
 }
 
+. "$PSScriptRoot\core\localization.ps1"
+Initialize-AutoDoctorLocalization | Out-Null
+
 # -----------------------------------------------------------------------------
 # DATABASE INITIALIZATION
 # -----------------------------------------------------------------------------
