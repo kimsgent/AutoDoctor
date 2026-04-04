@@ -2,6 +2,22 @@
   "project": "AutoDoctor",
   "versions": [
     {
+      "version": "1.1.0",
+      "date": "2026-04-04",
+      "changes": [
+        "feat(remediation): implement robust multi-method restore point creation with fallback support",
+        "feat(installer): add installer upgrade awareness and mode selection",
+        "feat(update): add cached GitHub update awareness system",
+        "feat(windows): add Windows patch history module",
+        "fix(installer): tighten install detection and gate upgrade option",
+        "fix(windows): capture security patches without Windows title prefix",
+        "fix(perf): localize performance counters with cached resolver",
+        "chore(git): refine .gitignore to improve repository hygiene",
+        "chore(merge): integrate localized counters, Windows patch history, and update awareness systems"
+      ]
+    },
+
+    {
       "version": "1.0.1",
       "date": "2026-03-28",
       "changes": [
@@ -14,7 +30,7 @@
         "chore(repo): add CODEOWNERS and PR templates for enforced reviews and standardized workflow"
       ]
     },
-    
+
     {
       "version": "1.0.0",
       "date": "2026-03-16",
