@@ -583,6 +583,7 @@ function New-AutoDoctorJsonReport {
         StartupPrograms      = ($ModuleResults | Where-Object Module -eq "Startup Analysis").Result.StartupPrograms
         InstalledSoftware    = ($ModuleResults | Where-Object Module -eq "Installed Software").Result
         WindowsUpdate        = ($ModuleResults | Where-Object Module -eq "Windows Update Status").Result
+        WindowsPatchHistory  = ($ModuleResults | Where-Object Module -eq "Windows Patch History").Result
         Drivers              = ($ModuleResults | Where-Object Module -eq "Driver Inventory").Result
         RootCauseAnalysis    = $rootCauseAnalysis
         HealthScore          = $healthScore
