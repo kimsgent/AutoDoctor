@@ -243,6 +243,25 @@ Generated: $reportTime
 </div>
 "@
 
+    $updateFooterHTML = ""
+
+    if ($Global:AutoDoctorUpdateInfo -and $Global:AutoDoctorUpdateInfo.UpdateAvailable -and $Global:AutoDoctorUpdateInfo.LatestVersion) {
+        $latestVersion = [string]$Global:AutoDoctorUpdateInfo.LatestVersion
+        $currentVersion = [string]$Global:AutoDoctorUpdateInfo.CurrentVersion
+        $repoUrl = [string]$Global:AutoDoctorUpdateInfo.RepoUrl
+
+        if (-not $repoUrl) {
+            $repoUrl = "https://github.com/kimsgent/autodoctor"
+        }
+
+        $updateFooterHTML = @"
+<div style='text-align:center; margin-top:10px; color:#cc3300; font-size:14px;'>
+  Update available: v$latestVersion (current: v$currentVersion) —
+  <a href='$repoUrl' target='_blank'>Download here</a>
+</div>
+"@
+    }
+
     $footerHTML = @"
 <hr style='margin-top:60px;'>
 
@@ -272,6 +291,10 @@ github.com/kimsgent/autodoctor
 </a>
 
 <br><br>
+
+$updateFooterHTML
+
+<br>
 
 <span class='disclaimer'>
 Disclaimer: AutoDoctor diagnostics are informational and provided without warranty.
