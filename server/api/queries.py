@@ -48,6 +48,8 @@ def get_health_trend(conn):
     cur.execute("""
     SELECT timestamp, health_score
     FROM diagnostics
+    WHERE health_score IS NOT NULL
+      AND module_name = 'Root Cause Analysis'
     ORDER BY timestamp ASC
     LIMIT 500
     """)

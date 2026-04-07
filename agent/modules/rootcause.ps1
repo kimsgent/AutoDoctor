@@ -22,7 +22,7 @@ $diskBusy  = $DiskObj.HighDiskUsage
 # Detect Issues
 # -----------------------------
 
-if ($MemoryObj -and $MemoryObj.FreeMemoryGB -lt 1) {
+if ($MemoryObj -and $MemoryObj.TotalMemoryGB -gt 0 -and $MemoryObj.FreeMemoryGB -lt 1) {
     $issues += "Low RAM available"
 }
 
@@ -56,7 +56,7 @@ if ($ErrorObj -and $ErrorObj.ErrorCount -gt 30) {
 
 $score = 100
 
-if ($MemoryObj -and $MemoryObj.FreeMemoryGB -lt 1) { $score -= 20 }
+if ($MemoryObj -and $MemoryObj.TotalMemoryGB -gt 0 -and $MemoryObj.FreeMemoryGB -lt 1) { $score -= 20 }
 if ($CPUObj -and $CPUObj.CurrentCPULoadPercent -gt 90) { $score -= 15 }
 if ($diskUsage -and ($diskUsage | Where-Object FreeGB -lt 5)) { $score -= 20 }
 if ($diskBusy -and $diskBusy.Count -gt 0) { $score -= 20 }
