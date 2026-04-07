@@ -29,6 +29,7 @@ const DEFAULT_API_PORT = "8000";
 let API_BASE = null;
 
 const REFRESH_INTERVAL_MS = 5000; // refresh every 5 seconds
+const HEALTH_Y_MAX = 105;
 
 function trimTrailingSlash(value) {
   return value ? value.replace(/\/+$/, "") : value;
@@ -77,6 +78,75 @@ async function resolveApiBase() {
   return API_BASE;
 }
 
+function formatTimeLabel(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value || "";
+  }
+
+  return parsed.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatTimeTooltip(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value || "";
+  }
+
+  return parsed.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+const healthThresholdPlugin = {
+  id: "healthThresholdPlugin",
+  afterDraw(chart, args, pluginOptions) {
+    const lines = pluginOptions && Array.isArray(pluginOptions.lines) ? pluginOptions.lines : [];
+    if (!lines.length) return;
+
+    const { ctx, chartArea, scales } = chart;
+    const yScale = scales.y;
+    if (!chartArea || !yScale) return;
+
+    ctx.save();
+
+    for (const line of lines) {
+      const y = yScale.getPixelForValue(line.value);
+      if (Number.isNaN(y) || y < chartArea.top || y > chartArea.bottom) continue;
+
+      ctx.strokeStyle = line.color || "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = line.width || 1;
+      ctx.setLineDash(Array.isArray(line.dash) ? line.dash : [6, 4]);
+
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, y);
+      ctx.lineTo(chartArea.right, y);
+      ctx.stroke();
+
+      if (line.label) {
+        ctx.setLineDash([]);
+        ctx.fillStyle = line.color || "rgba(255, 255, 255, 0.8)";
+        ctx.font = "11px Segoe UI";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(line.label, chartArea.right - 8, y - 2);
+      }
+    }
+
+    ctx.restore();
+  },
+};
+
+Chart.register(healthThresholdPlugin);
+
 // ----------------------------------------------------
 // Fetch JSON from API
 // ----------------------------------------------------
@@ -114,7 +184,7 @@ async function loadDashboardMeta() {
 // ----------------------------
 // Create or update line chart
 // ----------------------------
-function createLineChart(id, labels, data, label, options = {}) {
+function createLineChart(id, labels, data, label, options = {}, datasetOverrides = {}) {
   const ctx = document.getElementById(id).getContext("2d");
   if (ctx.chart) ctx.chart.destroy();
   ctx.chart = new Chart(ctx, {
@@ -132,6 +202,8 @@ function createLineChart(id, labels, data, label, options = {}) {
           pointRadius: 3,
           pointHoverRadius: 6,
           borderWidth: 2,
+          spanGaps: true,
+          ...datasetOverrides,
         },
       ],
     },
@@ -237,12 +309,92 @@ async function loadCharts() {
   // Health
   // ----------------------------
   const health = await fetchJSON("/api/health");
+  const healthPoints = (health || [])
+    .map((x) => ({
+      timestamp: x.timestamp,
+      score: Number(x.health_score),
+    }))
+    .filter((x) => Number.isFinite(x.score));
+
   createLineChart(
     "healthChart",
-    health.map((x) => x.timestamp),
-    health.map((x) => x.health_score),
+    healthPoints.map((x) => x.timestamp),
+    healthPoints.map((x) => x.score),
     "Health Score",
-    { scales: { y: { min: 0, max: 100 } } },
+    {
+      scales: {
+        x: {
+          ticks: {
+            color: "white",
+            maxTicksLimit: 6,
+            callback: function (value) {
+              const rawLabel = this.getLabelForValue(value);
+              return formatTimeLabel(rawLabel);
+            },
+          },
+          grid: { color: "#333" },
+        },
+        y: {
+          min: 0,
+          max: HEALTH_Y_MAX,
+          beginAtZero: true,
+          ticks: {
+            color: "white",
+            stepSize: 10,
+          },
+          grid: { color: "#333" },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: "white" } },
+        tooltip: {
+          mode: "index",
+          intersect: false,
+          callbacks: {
+            title: (items) => {
+              const rawLabel = items && items[0] && items[0].label ? items[0].label : "";
+              return formatTimeTooltip(rawLabel);
+            },
+          },
+        },
+        healthThresholdPlugin: {
+          lines: [
+            { value: 80, label: "Good (80)", color: "rgba(34, 197, 94, 0.8)", dash: [4, 4] },
+            { value: 60, label: "Warning (60)", color: "rgba(245, 158, 11, 0.9)", dash: [4, 4] },
+          ],
+        },
+      },
+    },
+    {
+      borderColor: "rgba(78, 161, 255, 1)",
+      backgroundColor: (context) => {
+        const chart = context.chart;
+        const chartArea = chart.chartArea;
+        if (!chartArea) {
+          return "rgba(78, 161, 255, 0.2)";
+        }
+
+        const gradient = chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        gradient.addColorStop(0, "rgba(34, 197, 94, 0.35)");
+        gradient.addColorStop(0.55, "rgba(245, 158, 11, 0.22)");
+        gradient.addColorStop(1, "rgba(239, 68, 68, 0.12)");
+        return gradient;
+      },
+      fill: true,
+      borderWidth: 3,
+      tension: 0.35,
+      pointRadius: 2,
+      pointHoverRadius: 5,
+      pointBackgroundColor: (context) => {
+        const score = Number(context.raw);
+        if (score >= 80) return "rgba(34, 197, 94, 1)";
+        if (score >= 60) return "rgba(245, 158, 11, 1)";
+        return "rgba(239, 68, 68, 1)";
+      },
+      pointBorderColor: "rgba(255, 255, 255, 0.95)",
+      pointBorderWidth: 1,
+      spanGaps: true,
+    },
   );
 
   // ----------------------------

@@ -113,9 +113,18 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
     # -----------------------------
     $memoryModule = $ModuleResults | Where-Object { $_.Module -eq "Memory Analysis" }
     if ($memoryModule) {
-        $totalMem = $memoryModule.Result.TotalMemoryGB
-        $freeMem = $memoryModule.Result.FreeMemoryGB
-        $memUsedPercent = [math]::Round((($totalMem - $freeMem) / $totalMem) * 100, 1)
+        $totalMem = if ($null -ne $memoryModule.Result.TotalMemoryGB) { [double]$memoryModule.Result.TotalMemoryGB } else { 0 }
+        $freeMem = if ($null -ne $memoryModule.Result.FreeMemoryGB) { [double]$memoryModule.Result.FreeMemoryGB } else { 0 }
+
+        if ($totalMem -gt 0) {
+            if ($freeMem -lt 0) { $freeMem = 0 }
+            if ($freeMem -gt $totalMem) { $freeMem = $totalMem }
+            $memUsedPercent = [math]::Round((($totalMem - $freeMem) / $totalMem) * 100, 1)
+        }
+        else {
+            $memUsedPercent = 0
+        }
+
         $memChart = @"
 <div class='card'>
 <h2>Memory Pressure</h2>
@@ -145,12 +154,17 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
             }
         }
 
-        $cpuPercent = $cpuModule.Result.CurrentCPULoadPercent
+        $cpuPercent = if ($null -ne $cpuModule.Result.CurrentCPULoadPercent) { [double]$cpuModule.Result.CurrentCPULoadPercent } else { 0 }
+        if ($cpuPercent -lt 0) { $cpuPercent = 0 }
+        if ($cpuPercent -gt 100) { $cpuPercent = 100 }
 
         $cpuChartData = ""
-        if ($cpuModule.Result.TopProcesses) {
-            $cpuChartData = ($cpuModule.Result.TopProcesses | ForEach-Object {
-                    "<p>$($_.ProcessName): $([math]::Round($_.CPU,2))</p>"
+        $topProcesses = if ($cpuModule.Result.TopProcesses) { @($cpuModule.Result.TopProcesses) } else { @() }
+
+        if ($topProcesses.Count -gt 0) {
+            $cpuChartData = ($topProcesses | ForEach-Object {
+                    $processCpu = if ($null -ne $_.CPU) { [math]::Round([double]$_.CPU,2) } else { 0 }
+                    "<p>$($_.ProcessName): $processCpu</p>"
                 }) -join "`n"
         }
 
@@ -192,8 +206,9 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
         }
 
         $diskChartData = @()
-        if ($diskModule.Result.DiskIOSummary) {
-            $diskChartData += ($diskModule.Result.DiskIOSummary | ForEach-Object {
+        $diskSummaryRows = if ($diskModule.Result.DiskIOSummary) { @($diskModule.Result.DiskIOSummary) } else { @() }
+        if ($diskSummaryRows.Count -gt 0) {
+            $diskChartData += ($diskSummaryRows | ForEach-Object {
                     "<p>$($_.Disk): $($_.PercentBusy)% busy</p>"
                 }) -join "`n"
         }
@@ -408,9 +423,17 @@ function New-AutoDoctorJsonReport {
     # MEMORY
     # -------------------------
     $memoryModule = $ModuleResults | Where-Object { $_.Module -eq "Memory Analysis" }
-    $totalMem = if ($memoryModule) { $memoryModule.Result.TotalMemoryGB } else { 0 }
-    $freeMem = if ($memoryModule) { $memoryModule.Result.FreeMemoryGB } else { 0 }
-    $memUsedPercent = if ($totalMem -and $freeMem) { [math]::Round((($totalMem - $freeMem) / $totalMem) * 100, 1) } else { 0 }
+    $totalMem = if ($memoryModule -and $null -ne $memoryModule.Result.TotalMemoryGB) { [double]$memoryModule.Result.TotalMemoryGB } else { 0 }
+    $freeMem = if ($memoryModule -and $null -ne $memoryModule.Result.FreeMemoryGB) { [double]$memoryModule.Result.FreeMemoryGB } else { 0 }
+
+    if ($totalMem -gt 0) {
+        if ($freeMem -lt 0) { $freeMem = 0 }
+        if ($freeMem -gt $totalMem) { $freeMem = $totalMem }
+        $memUsedPercent = [math]::Round((($totalMem - $freeMem) / $totalMem) * 100, 1)
+    }
+    else {
+        $memUsedPercent = 0
+    }
 
     # -------------------------
     # CPU per-core (with fallback)
@@ -438,7 +461,7 @@ function New-AutoDoctorJsonReport {
 
     if ($cpuCounters) {
         $cpuCoreData = $cpuCounters.CounterSamples |
-            Where-Object { $_.InstanceName -ne "_Total" } |
+            Where-Object { $_.InstanceName -notmatch '^(?i)_?(total|gesamt)$' } |
             ForEach-Object {
                 [PSCustomObject]@{
                     Core        = $_.InstanceName
@@ -454,7 +477,7 @@ function New-AutoDoctorJsonReport {
 
             if ($cpuPerf) {
                 $cpuCoreData = $cpuPerf |
-                    Where-Object { $_.Name -ne "_Total" } |
+                    Where-Object { $_.Name -notmatch '^(?i)_?(total|gesamt)$' } |
                     ForEach-Object {
                         [PSCustomObject]@{
                             Core        = $_.Name
@@ -494,7 +517,9 @@ function New-AutoDoctorJsonReport {
     }
 
     if ($diskIO) {
-        $diskIOSummaryData = $diskIO.CounterSamples | ForEach-Object {
+        $diskIOSummaryData = $diskIO.CounterSamples |
+            Where-Object { $_.InstanceName -notmatch '^(?i)_?(total|gesamt)$' } |
+            ForEach-Object {
             [PSCustomObject]@{
                 Disk        = $_.InstanceName
                 PercentBusy = [math]::Round($_.CookedValue, 2)
@@ -508,7 +533,7 @@ function New-AutoDoctorJsonReport {
             $diskPerf = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk
 
             if ($diskPerf) {
-                $diskIOSummaryData = $diskPerf | Where-Object { $_.Name -ne "_Total" } | ForEach-Object {
+                $diskIOSummaryData = $diskPerf | Where-Object { $_.Name -notmatch '^(?i)_?(total|gesamt)$' } | ForEach-Object {
                     [PSCustomObject]@{
                         Disk        = $_.Name
                         PercentBusy = [math]::Round($_.PercentDiskTime, 2)
@@ -577,6 +602,26 @@ function New-AutoDoctorJsonReport {
         if ($remediationResult.Result) { $remediationResult.Result } else { "No remediation actions executed" }
     } else { "No remediation module executed" }
 
+    $cpuModuleResult = ($ModuleResults | Where-Object Module -eq "CPU Analysis").Result
+    $diskModuleResult = ($ModuleResults | Where-Object Module -eq "Disk Analysis").Result
+    $networkModuleResult = ($ModuleResults | Where-Object Module -eq "Network Analysis").Result
+
+    $cpuTopProcesses = if ($cpuModuleResult -and $cpuModuleResult.TopProcesses) { @($cpuModuleResult.TopProcesses) } else { @() }
+    $diskUsageData = if ($diskModuleResult -and $diskModuleResult.DiskUsage) { @($diskModuleResult.DiskUsage) } else { @() }
+    $diskSmartData = if ($diskModuleResult -and $diskModuleResult.SMARTHealth) { @($diskModuleResult.SMARTHealth) } else { @() }
+    $networkConnectivityData = if ($networkModuleResult -and $networkModuleResult.Connectivity) {
+        $networkModuleResult.Connectivity
+    }
+    else {
+        [PSCustomObject]@{
+            PacketsSent     = 0
+            PacketsReceived = 0
+            AvgLatencyMS    = 0
+            Status          = "Unavailable"
+        }
+    }
+    $networkAdaptersData = if ($networkModuleResult -and $networkModuleResult.Adapters) { @($networkModuleResult.Adapters) } else { @() }
+
     # -------------------------
     # Build JSON object
     # -------------------------
@@ -584,8 +629,8 @@ function New-AutoDoctorJsonReport {
         SystemInfo           = ($ModuleResults | Where-Object Module -eq "System Information").Result
         SystemUptime         = ($ModuleResults | Where-Object Module -eq "System Uptime").Result
         CPU                  = @{
-            TopProcesses = ($ModuleResults | Where-Object Module -eq "CPU Analysis").Result.TopProcesses
-            LoadStatus   = ($ModuleResults | Where-Object Module -eq "CPU Analysis").Result
+            TopProcesses = @($cpuTopProcesses)
+            LoadStatus   = $cpuModuleResult
             PerCoreUsage = $cpuCoreData
         }
         Memory               = @{
@@ -594,13 +639,13 @@ function New-AutoDoctorJsonReport {
             UsedPercent = $memUsedPercent
         }
         Disk                 = @{
-            Usage       = ($ModuleResults | Where-Object Module -eq "Disk Analysis").Result.DiskUsage
-            SMARTHealth = ($ModuleResults | Where-Object Module -eq "Disk Analysis").Result.SMARTHealth
+            Usage       = @($diskUsageData)
+            SMARTHealth = @($diskSmartData)
             IO          = $diskIOSummaryData
         }
         Network              = @{
-            Connectivity = ($ModuleResults | Where-Object Module -eq "Network Analysis").Result.Connectivity
-            Adapters     = ($ModuleResults | Where-Object Module -eq "Network Analysis").Result.Adapters
+            Connectivity = $networkConnectivityData
+            Adapters     = @($networkAdaptersData)
         }
         EventLogs            = ($ModuleResults | Where-Object Module -eq "Event Log Analysis").Result.RecentErrors
         StartupPrograms      = ($ModuleResults | Where-Object Module -eq "Startup Analysis").Result.StartupPrograms
