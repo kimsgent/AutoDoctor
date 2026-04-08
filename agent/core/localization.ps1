@@ -149,7 +149,7 @@ function Get-AutoDoctorCounterSetNameRegex {
         'PhysicalDisk' {
             return @(
                 '^physical ?disk$',
-                'physikal.*datentrager',
+                '^physikal(?:ischer)?\s+datentrae?ger$',
                 'disque.*physique',
                 'disco.*fisic',
                 'dysk.*fizycz'
@@ -162,8 +162,8 @@ function Get-AutoDoctorCounterSetNameRegex {
         }
         'Network' {
             return @(
-                'network.*interface',
-                'netzwerk.*schnittstelle',
+                '^network interface$',
+                '^netzwerkschnittstelle$',
                 'interface.*reseau',
                 'interfaz.*red',
                 'interfaccia.*rete'
@@ -207,7 +207,7 @@ function Get-AutoDoctorCounterNameRegex {
                 'disco.*tiempo',
                 'disco.*tempo',
                 'dysk.*czas',
-                '^zeit\s*%?$'
+                '^zeit\s*%$'
             )
         }
         '^available\s*bytes$' {
