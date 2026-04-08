@@ -89,7 +89,7 @@ function Get-AutoDoctorComparableText {
     return $normalized.Trim()
 }
 
-function Convert-AutoDoctorCounterPath {
+function Get-AutoDoctorCounterPathParts {
     param(
         [string]$CounterPath
     )
@@ -127,9 +127,12 @@ function Format-AutoDoctorCounterInstanceSegment {
     $instanceName = $Matches.InstanceName.Trim()
     $comparableInstance = Get-AutoDoctorComparableText -Value $instanceName
 
-    if ($instanceName -eq "*" -or
-        $comparableInstance -in @('_total', '_gesamt', 'total', 'gesamt', 'totale', 'totaal')) {
+    if ($instanceName -eq "*") {
         return "(*)"
+    }
+
+    if ($comparableInstance -in @('_total', '_gesamt', 'total', 'gesamt', 'totale', 'totaal')) {
+        return "(_Total)"
     }
 
     return "($instanceName)"
@@ -319,7 +322,7 @@ function Find-AutoDoctorCounterSetByProbe {
 
         $candidatePaths = Get-AutoDoctorCounterCandidatePaths -CounterSet $counterSet
         foreach ($candidatePath in $candidatePaths) {
-            $parsedPath = Convert-AutoDoctorCounterPath -CounterPath $candidatePath
+            $parsedPath = Get-AutoDoctorCounterPathParts -CounterPath $candidatePath
             if (-not $parsedPath) {
                 continue
             }
@@ -373,7 +376,7 @@ function Find-AutoDoctorLocalizedCounterComponents {
     $bestScore = -1
 
     foreach ($candidatePath in (Get-AutoDoctorCounterCandidatePaths -CounterSet $CounterSet)) {
-        $parsedPath = Convert-AutoDoctorCounterPath -CounterPath $candidatePath
+        $parsedPath = Get-AutoDoctorCounterPathParts -CounterPath $candidatePath
         if (-not $parsedPath) {
             continue
         }
@@ -456,7 +459,7 @@ function Convert-AutoDoctorCounterPath {
         return $null
     }
 
-    $parsedPath = Convert-AutoDoctorCounterPath -CounterPath $CounterPath
+    $parsedPath = Get-AutoDoctorCounterPathParts -CounterPath $CounterPath
     if (-not $parsedPath) {
         return $null
     }
