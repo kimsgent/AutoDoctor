@@ -89,7 +89,7 @@ function Get-AutoDoctorComparableText {
     return $normalized.Trim()
 }
 
-function Parse-AutoDoctorCounterPath {
+function Convert-AutoDoctorCounterPath {
     param(
         [string]$CounterPath
     )
@@ -110,7 +110,7 @@ function Parse-AutoDoctorCounterPath {
     }
 }
 
-function Normalize-AutoDoctorCounterInstanceSegment {
+function Format-AutoDoctorCounterInstanceSegment {
     param(
         [string]$InstanceSegment
     )
@@ -149,7 +149,7 @@ function Get-AutoDoctorCounterSetNameRegex {
         'PhysicalDisk' {
             return @(
                 '^physical ?disk$',
-                'physikal.*datentrager',
+                '^physikal(?:ischer)?\s+datentrae?ger$',
                 'disque.*physique',
                 'disco.*fisic',
                 'dysk.*fizycz'
@@ -162,8 +162,8 @@ function Get-AutoDoctorCounterSetNameRegex {
         }
         'Network' {
             return @(
-                'network.*interface',
-                'netzwerk.*schnittstelle',
+                '^network interface$',
+                '^netzwerkschnittstelle$',
                 'interface.*reseau',
                 'interfaz.*red',
                 'interfaccia.*rete'
@@ -207,7 +207,7 @@ function Get-AutoDoctorCounterNameRegex {
                 'disco.*tiempo',
                 'disco.*tempo',
                 'dysk.*czas',
-                '^zeit\s*%?$'
+                '^zeit\s*%$'
             )
         }
         '^available\s*bytes$' {
@@ -319,7 +319,7 @@ function Find-AutoDoctorCounterSetByProbe {
 
         $candidatePaths = Get-AutoDoctorCounterCandidatePaths -CounterSet $counterSet
         foreach ($candidatePath in $candidatePaths) {
-            $parsedPath = Parse-AutoDoctorCounterPath -CounterPath $candidatePath
+            $parsedPath = Convert-AutoDoctorCounterPath -CounterPath $candidatePath
             if (-not $parsedPath) {
                 continue
             }
@@ -373,7 +373,7 @@ function Find-AutoDoctorLocalizedCounterComponents {
     $bestScore = -1
 
     foreach ($candidatePath in (Get-AutoDoctorCounterCandidatePaths -CounterSet $CounterSet)) {
-        $parsedPath = Parse-AutoDoctorCounterPath -CounterPath $candidatePath
+        $parsedPath = Convert-AutoDoctorCounterPath -CounterPath $candidatePath
         if (-not $parsedPath) {
             continue
         }
@@ -456,7 +456,7 @@ function Convert-AutoDoctorCounterPath {
         return $null
     }
 
-    $parsedPath = Parse-AutoDoctorCounterPath -CounterPath $CounterPath
+    $parsedPath = Convert-AutoDoctorCounterPath -CounterPath $CounterPath
     if (-not $parsedPath) {
         return $null
     }
@@ -504,9 +504,9 @@ function Convert-AutoDoctorCounterPath {
         return $null
     }
 
-    $instanceSegment = Normalize-AutoDoctorCounterInstanceSegment -InstanceSegment $parsedPath.InstanceSegment
+    $instanceSegment = Format-AutoDoctorCounterInstanceSegment -InstanceSegment $parsedPath.InstanceSegment
     if ([string]::IsNullOrWhiteSpace($instanceSegment)) {
-        $instanceSegment = Normalize-AutoDoctorCounterInstanceSegment -InstanceSegment $localizedCounterComponent.InstanceSegment
+        $instanceSegment = Format-AutoDoctorCounterInstanceSegment -InstanceSegment $localizedCounterComponent.InstanceSegment
     }
 
     return "\" + $localizedCounterComponent.ObjectName + $instanceSegment + "\" + $localizedCounterComponent.CounterName
