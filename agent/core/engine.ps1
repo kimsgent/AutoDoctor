@@ -32,21 +32,35 @@ function Invoke-AutoDoctorModules {
 
         try {
 
-            # Retrieve prior module outputs
-            $memoryObj  = ($results | Where-Object Module -eq "Memory Analysis").Result
-            $cpuObj     = ($results | Where-Object Module -eq "CPU Analysis").Result
-            $diskObj    = ($results | Where-Object Module -eq "Disk Analysis").Result
-            $networkObj = ($results | Where-Object Module -eq "Network Analysis").Result
-            $errorObj   = ($results | Where-Object Module -eq "Event Log Analysis").Result
+            # Retrieve prior module outputs and only bind the parameters
+            # each module explicitly declares.
+            $context = @{
+                MemoryObj      = ($results | Where-Object Module -eq "Memory Analysis").Result
+                CPUObj         = ($results | Where-Object Module -eq "CPU Analysis").Result
+                DiskObj        = ($results | Where-Object Module -eq "Disk Analysis").Result
+                NetworkObj     = ($results | Where-Object Module -eq "Network Analysis").Result
+                ErrorObj       = ($results | Where-Object Module -eq "Event Log Analysis").Result
+                StartupObj     = ($results | Where-Object Module -eq "Startup Analysis").Result
+                SoftwareObj    = ($results | Where-Object Module -eq "Installed Software").Result
+                DriverObj      = ($results | Where-Object Module -eq "Driver Inventory").Result
+                ValidationObj  = ($results | Where-Object Module -eq "Data Validation").Result
+                AnomalyObj     = ($results | Where-Object Module -eq "Anomaly Analysis").Result
+                CorrelationObj = ($results | Where-Object Module -eq "Correlation Analysis").Result
+                ModuleResults  = @($results)
+                ScriptStart    = $ScriptStart
+            }
 
-            # Build parameter set dynamically
-            $params = @{
-                MemoryObj   = $memoryObj
-                CPUObj      = $cpuObj
-                DiskObj     = $diskObj
-                NetworkObj  = $networkObj
-                ErrorObj    = $errorObj
-                ScriptStart = $ScriptStart
+            $params = @{}
+            $paramBlock = $module.Execute.Ast.ParamBlock
+
+            if ($paramBlock) {
+                foreach ($parameter in $paramBlock.Parameters) {
+                    $paramName = $parameter.Name.VariablePath.UserPath
+
+                    if ($context.ContainsKey($paramName)) {
+                        $params[$paramName] = $context[$paramName]
+                    }
+                }
             }
 
             # Execute module

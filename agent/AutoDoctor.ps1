@@ -199,7 +199,31 @@ $JSONReport = $Global:AutoDoctorReportJSON
 . "$PSScriptRoot\core\engine.ps1"
 
 # Load modules
-Get-ChildItem "$PSScriptRoot\modules\*.ps1" | ForEach-Object {
+$moduleLoadOrder = @(
+    "systeminfo.ps1",
+    "uptime.ps1",
+    "memory.ps1",
+    "cpu.ps1",
+    "disk.ps1",
+    "network.ps1",
+    "events.ps1",
+    "startup.ps1",
+    "software.ps1",
+    "drivers.ps1",
+    "windowsupdate.ps1",
+    "windowspatches.ps1",
+    "validation.ps1",
+    "anomaly.ps1",
+    "correlation.ps1",
+    "rootcause.ps1",
+    "remediation.ps1"
+)
+
+Get-ChildItem "$PSScriptRoot\modules\*.ps1" |
+Sort-Object {
+    $index = $moduleLoadOrder.IndexOf($_.Name)
+    if ($index -ge 0) { $index } else { [int]::MaxValue }
+}, Name | ForEach-Object {
     try {
         . $_.FullName
     }
@@ -317,6 +341,13 @@ else {
 
 $Sections += Add-Section "Root Cause Analysis" $issuesText
 $Sections += Add-Section "System Health Score" $healthText
+
+if ($rootModule -and $rootModule.Result -and $rootModule.Result.Details) {
+    if (@($rootModule.Result.Details.ValidationIssues).Count -gt 0) {
+        $Sections += Add-Section "Data Integrity Findings" $rootModule.Result.Details.ValidationIssues
+    }
+}
+
 $Sections += Add-Section "Execution Statistics" $execText
 
 # -----------------------------

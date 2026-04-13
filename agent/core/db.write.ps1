@@ -185,7 +185,22 @@ function Write-AutoDoctorAlerts {
 
     if (-not $rootModule) { return }
 
-    $issues = $rootModule.Result.Details.DetectedIssues
+    $findings = if ($rootModule.Result.Details.Findings) {
+        @($rootModule.Result.Details.Findings)
+    }
+    else {
+        @()
+    }
+
+    $issues = if ($findings.Count -gt 0) {
+        $findings
+    }
+    elseif ($rootModule.Result.Details.DetectedIssues) {
+        @($rootModule.Result.Details.DetectedIssues)
+    }
+    else {
+        @()
+    }
 
     if (-not $issues -or $issues.Count -eq 0) { return }
 
@@ -199,9 +214,18 @@ function Write-AutoDoctorAlerts {
         foreach ($issue in $issues) {
 
             $severity = "Warning"
+            $message = $issue
+            $alertType = "RootCause"
 
-            if ($issue -match "disk failure") { $severity = "Critical" }
-            elseif ($issue -match "Low disk space") { $severity = "Critical" }
+            if ($issue -is [psobject]) {
+                if ($issue.Severity) { $severity = [string]$issue.Severity }
+                if ($issue.Message) { $message = [string]$issue.Message }
+                if ($issue.Category) { $alertType = [string]$issue.Category }
+            }
+            else {
+                if ($issue -match "disk failure") { $severity = "Critical" }
+                elseif ($issue -match "Low disk space") { $severity = "Critical" }
+            }
 
             $cmd = $connection.CreateCommand()
             $cmd.Transaction = $transaction
@@ -215,9 +239,9 @@ VALUES
 
             $cmd.Parameters.AddWithValue("@runid", $Global:AutoDoctorRunID) | Out-Null
             $cmd.Parameters.AddWithValue("@hostname", $env:COMPUTERNAME) | Out-Null
-            $cmd.Parameters.AddWithValue("@type", "RootCause") | Out-Null
+            $cmd.Parameters.AddWithValue("@type", $alertType) | Out-Null
             $cmd.Parameters.AddWithValue("@severity", $severity) | Out-Null
-            $cmd.Parameters.AddWithValue("@message", $issue) | Out-Null
+            $cmd.Parameters.AddWithValue("@message", $message) | Out-Null
 
             $cmd.ExecuteNonQuery() | Out-Null
         }

@@ -35,6 +35,51 @@ function Get-SafeModuleResult {
     return $mod.Result
 }
 
+function Convert-AutoDoctorFindingsToHtml {
+    param(
+        [array]$Findings,
+        [string]$Title
+    )
+
+    if (-not $Findings -or $Findings.Count -eq 0) {
+        return ""
+    }
+
+    $rows = $Findings | ConvertTo-Html -Fragment
+    return @"
+<div class='card full'>
+<h2>$Title</h2>
+$rows
+</div>
+"@
+}
+
+function Get-AutoDoctorDetailCollection {
+    param($Value)
+
+    if ($null -eq $Value) {
+        return ,([object[]]@())
+    }
+
+    if ($Value -is [System.Array]) {
+        return ,([object[]]@($Value))
+    }
+
+    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string] -and $Value -isnot [psobject]) {
+        return ,([object[]]@($Value))
+    }
+
+    if ($Value -is [psobject]) {
+        $propertyNames = @($Value.PSObject.Properties.Name)
+        $meaningfulPropertyNames = @($propertyNames | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        if ($meaningfulPropertyNames.Count -eq 0) {
+            return ,([object[]]@())
+        }
+    }
+
+    return ,([object[]]@($Value))
+}
+
 
 # -----------------------------------------------------------------------------
 # HTML REPORT FUNCTION
@@ -90,6 +135,7 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
     $rootModule = $ModuleResults | Where-Object Module -eq "Root Cause Analysis"
     $score = if ($rootModule) { $rootModule.Result.HealthScore } else { 0 }
     $displayText = if ($rootModule) { $rootModule.Result.HealthText } else { "$score / 100" }
+    $rootDetails = if ($rootModule -and $rootModule.Result) { $rootModule.Result.Details } else { $null }
 
     if ($score -lt 0) { $score = 0 }
     if ($score -gt 100) { $score = 100 }
@@ -220,6 +266,32 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
 </div>
 "@
     } else { $diskChart = "" }
+
+    $severityPanel = ""
+    $findingsPanel = ""
+    $anomalyPanel = ""
+    $correlationPanel = ""
+
+    if ($rootDetails) {
+        if ($rootDetails.SeverityCounts) {
+            $severityRows = @(
+                [PSCustomObject]@{ Severity = "Critical"; Count = $rootDetails.SeverityCounts.Critical }
+                [PSCustomObject]@{ Severity = "Warning"; Count = $rootDetails.SeverityCounts.Warning }
+                [PSCustomObject]@{ Severity = "Info"; Count = $rootDetails.SeverityCounts.Info }
+            ) | ConvertTo-Html -Fragment
+
+            $severityPanel = @"
+<div class='card'>
+<h2>Severity Summary</h2>
+$severityRows
+</div>
+"@
+        }
+
+        $findingsPanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.Findings) -Title "Root Cause Findings"
+        $anomalyPanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.Anomalies) -Title "Anomaly Insights"
+        $correlationPanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.Correlations) -Title "Correlation Insights"
+    }
 
     # -----------------------------
     # JOIN MODULE SECTIONS
@@ -389,9 +461,13 @@ $logoHTML
 <div class='dashboard'>
 
 $healthVisual
+$severityPanel
 $memChart
 $cpuChart
 $diskChart
+$findingsPanel
+$anomalyPanel
+$correlationPanel
 $body
 
 </div>
@@ -559,6 +635,28 @@ function New-AutoDoctorJsonReport {
     } else {
         "No Root Cause Analysis executed"
     }
+    $rootDetails = if ($rootResult -and $rootResult.Result -and $rootResult.Result.Details) {
+        [PSCustomObject]@{
+            Findings         = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.Findings
+            DetectedIssues   = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.DetectedIssues
+            SeverityCounts   = if ($rootResult.Result.Details.SeverityCounts) {
+                $rootResult.Result.Details.SeverityCounts
+            }
+            else {
+                [PSCustomObject]@{
+                    Info     = 0
+                    Warning  = 0
+                    Critical = 0
+                }
+            }
+            Anomalies        = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.Anomalies
+            Correlations     = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.Correlations
+            ValidationIssues = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.ValidationIssues
+        }
+    }
+    else {
+        $null
+    }
 
     # -------------------------
     # HEALTH SCORE (JSON)
@@ -654,6 +752,7 @@ function New-AutoDoctorJsonReport {
         WindowsPatchHistory  = ($ModuleResults | Where-Object Module -eq "Windows Patch History").Result
         Drivers              = ($ModuleResults | Where-Object Module -eq "Driver Inventory").Result
         RootCauseAnalysis    = $rootCauseAnalysis
+        RootCauseDetails     = $rootDetails
         HealthScore          = $healthScore
         AutomaticRemediation = $automaticRemediation
         ExecutionStats       = $executionStats
