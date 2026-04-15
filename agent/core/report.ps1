@@ -113,10 +113,32 @@ function Get-AutoDoctorDirectionDisplay {
     }
 }
 
+function ConvertTo-AutoDoctorHtmlString {
+    param($Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    if ($Value -is [string]) {
+        return $Value
+    }
+
+    if ($Value -is [System.Array]) {
+        return (@($Value) | ForEach-Object { [string]$_ }) -join "`n"
+    }
+
+    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+        return (@($Value) | ForEach-Object { [string]$_ }) -join "`n"
+    }
+
+    return [string]$Value
+}
+
 function ConvertTo-AutoDoctorCardHtml {
     param(
         [Parameter(Mandatory = $true)][string]$Title,
-        [Parameter(Mandatory = $true)][string]$Body,
+        [Parameter(Mandatory = $true)]$Body,
         [switch]$FullWidth,
         [switch]$Collapsible,
         [switch]$Expanded,
@@ -124,6 +146,7 @@ function ConvertTo-AutoDoctorCardHtml {
     )
 
     $className = if ($FullWidth) { "card full" } else { "card" }
+    $bodyHtml = ConvertTo-AutoDoctorHtmlString -Value $Body
 
     if ($Collapsible) {
         $openAttr = if ($Expanded) { " open" } else { "" }
@@ -133,7 +156,7 @@ function ConvertTo-AutoDoctorCardHtml {
 <details class='$className card-collapse'$openAttr>
 <summary><span>$Title</span>$meta<span class='summary-icon'>+</span></summary>
 <div class='card-content'>
-$Body
+$bodyHtml
 </div>
 </details>
 "@
@@ -142,7 +165,7 @@ $Body
     return @"
 <div class='$className'>
 <h2>$Title</h2>
-$Body
+$bodyHtml
 </div>
 "@
 }
@@ -159,7 +182,7 @@ function Convert-AutoDoctorFindingsToHtml {
         return ""
     }
 
-    $rows = $Findings | ConvertTo-Html -Fragment
+    $rows = @($Findings | ConvertTo-Html -Fragment) -join "`n"
     return ConvertTo-AutoDoctorCardHtml -Title $Title -Body $rows -FullWidth -Collapsible:$Collapsible -Expanded:$Expanded -SummaryText ("{0} item{1}" -f $Findings.Count, $(if ($Findings.Count -eq 1) { "" } else { "s" }))
 }
 
@@ -281,7 +304,7 @@ function Convert-AutoDoctorSectionToHtml {
 
     return ConvertTo-AutoDoctorCardHtml `
         -Title ([string]$Section.Title) `
-        -Body ([string]$Section.ContentHtml) `
+        -Body $Section.ContentHtml `
         -FullWidth:([bool]$Section.FullWidth) `
         -Collapsible:([bool]$Section.Collapsible) `
         -Expanded:([bool]$Section.Expanded) `
@@ -545,11 +568,11 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
 
     if ($rootDetails) {
         if ($rootDetails.SeverityCounts) {
-            $severityRows = @(
+            $severityRows = @(@(
                 [PSCustomObject]@{ Severity = "Critical"; Count = $rootDetails.SeverityCounts.Critical }
                 [PSCustomObject]@{ Severity = "Warning"; Count = $rootDetails.SeverityCounts.Warning }
                 [PSCustomObject]@{ Severity = "Info"; Count = $rootDetails.SeverityCounts.Info }
-            ) | ConvertTo-Html -Fragment
+            ) | ConvertTo-Html -Fragment) -join "`n"
 
             $severityPanel = @"
 <div class='card'>
