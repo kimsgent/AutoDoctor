@@ -3,7 +3,8 @@ function New-AutoDoctorFinding {
         [Parameter(Mandatory = $true)][string]$Category,
         [Parameter(Mandatory = $true)][string]$Severity,
         [Parameter(Mandatory = $true)][string]$Message,
-        [string]$Source = "Rule"
+        [string]$Source = "Rule",
+        [string]$Type = ""
     )
 
     return [PSCustomObject]@{
@@ -11,6 +12,7 @@ function New-AutoDoctorFinding {
         Severity = $Severity
         Message  = $Message
         Source   = $Source
+        Type     = $Type
     }
 }
 
@@ -24,7 +26,8 @@ function Add-AutoDoctorFinding {
         $_.Category -eq $Finding.Category -and
         $_.Severity -eq $Finding.Severity -and
         $_.Message -eq $Finding.Message -and
-        $_.Source -eq $Finding.Source
+        $_.Source -eq $Finding.Source -and
+        $_.Type -eq $Finding.Type
     }
 
     if (-not $existing) {
@@ -32,28 +35,73 @@ function Add-AutoDoctorFinding {
     }
 }
 
+function Convert-AutoDoctorHistoryIssueToFinding {
+    param(
+        [Parameter(Mandatory = $true)]$Issue
+    )
+
+    return New-AutoDoctorFinding `
+        -Category $Issue.Category `
+        -Severity $Issue.Severity `
+        -Message $Issue.Message `
+        -Source "History" `
+        -Type $Issue.Type
+}
+
 function Get-AutoDoctorSeverityWeight {
     param($Finding)
 
     $weight = switch ($Finding.Severity) {
-        "Info" { 2 }
+        "Info" { 1 }
         "Warning" { 5 }
         "Critical" { 15 }
         default { 0 }
     }
 
     if ($Finding.Source -eq "Anomaly") {
-        $weight += 5
+        $weight += 2
     }
-    elseif ($Finding.Source -eq "Validation") {
-        $weight += 3
+    elseif ($Finding.Source -eq "Validation" -and $Finding.Severity -ne "Info") {
+        $weight += 2
     }
-
     if ($Finding.Category -eq "Disk" -and $Finding.Message -match "failure") {
         $weight += 10
     }
 
+    if ($Finding.Type -eq "Sustained") {
+        $weight += 6
+    }
+    elseif ($Finding.Type -eq "Persistent") {
+        $weight += 4
+    }
+    elseif ($Finding.Type -eq "Transient") {
+        $weight += 1
+    }
+    elseif ($Finding.Type -eq "Baseline") {
+        $weight += 4
+    }
+
     return $weight
+}
+
+function Get-AutoDoctorPenaltyMultiplier {
+    param(
+        [Parameter(Mandatory = $true)]$Finding,
+        [int]$CategoryOccurrence = 0
+    )
+
+    $categoryFactor = switch ($CategoryOccurrence) {
+        0 { 1.0 }
+        1 { 0.7 }
+        2 { 0.5 }
+        default { 0.35 }
+    }
+
+    if ($Finding.Source -eq "Validation" -and $Finding.Severity -eq "Info") {
+        return [double]($categoryFactor * 0.5)
+    }
+
+    return [double]$categoryFactor
 }
 
 Register-AutoDoctorModule -Name "Root Cause Analysis" -Execute {
@@ -69,6 +117,7 @@ Register-AutoDoctorModule -Name "Root Cause Analysis" -Execute {
     )
 
     $findings = [System.Collections.ArrayList]::new()
+    $historyAnalysis = Invoke-AutoDoctorHistoryAnalysis -CPUObj $CPUObj -MemoryObj $MemoryObj -DiskObj $DiskObj -NetworkObj $NetworkObj
 
     $diskUsage = if ($DiskObj -and $DiskObj.DiskUsage) { @($DiskObj.DiskUsage) } else { @() }
     $smart = if ($DiskObj -and $DiskObj.SMARTHealth) { @($DiskObj.SMARTHealth) } else { @() }
@@ -167,6 +216,18 @@ Register-AutoDoctorModule -Name "Root Cause Analysis" -Execute {
         Add-AutoDoctorFinding -Collection $findings -Finding $correlationFinding
     }
 
+    foreach ($historyIssue in @($historyAnalysis.SustainedIssues)) {
+        Add-AutoDoctorFinding -Collection $findings -Finding (Convert-AutoDoctorHistoryIssueToFinding -Issue $historyIssue)
+    }
+
+    foreach ($historyIssue in @($historyAnalysis.TransientIssues)) {
+        Add-AutoDoctorFinding -Collection $findings -Finding (Convert-AutoDoctorHistoryIssueToFinding -Issue $historyIssue)
+    }
+
+    foreach ($historyIssue in @($historyAnalysis.BaselineDeviations)) {
+        Add-AutoDoctorFinding -Collection $findings -Finding (Convert-AutoDoctorHistoryIssueToFinding -Issue $historyIssue)
+    }
+
     $orderedFindings = @($findings | Sort-Object @{ Expression = {
                     switch ($_.Severity) {
                         "Critical" { 0 }
@@ -178,8 +239,30 @@ Register-AutoDoctorModule -Name "Root Cause Analysis" -Execute {
             }, Category, Message)
 
     $score = 100
+    $categoryPenaltyCounts = @{}
+    $penaltyBreakdown = @()
     foreach ($finding in $orderedFindings) {
-        $score -= Get-AutoDoctorSeverityWeight -Finding $finding
+        $categoryKey = if ($finding.Category) { [string]$finding.Category } else { "Uncategorized" }
+
+        if (-not $categoryPenaltyCounts.ContainsKey($categoryKey)) {
+            $categoryPenaltyCounts[$categoryKey] = 0
+        }
+
+        $baseWeight = Get-AutoDoctorSeverityWeight -Finding $finding
+        $multiplier = Get-AutoDoctorPenaltyMultiplier -Finding $finding -CategoryOccurrence $categoryPenaltyCounts[$categoryKey]
+        $penalty = [math]::Round(($baseWeight * $multiplier), 0)
+        $score -= $penalty
+        $penaltyBreakdown += [PSCustomObject]@{
+            Category   = $categoryKey
+            Severity   = $finding.Severity
+            Source     = $finding.Source
+            Type       = $finding.Type
+            Message    = $finding.Message
+            BaseWeight = $baseWeight
+            Multiplier = [math]::Round($multiplier, 2)
+            Penalty    = $penalty
+        }
+        $categoryPenaltyCounts[$categoryKey]++
     }
 
     if ($orderedFindings.Count -gt 0 -and @($orderedFindings | Where-Object Source -eq "Anomaly").Count -gt 0 -and $score -gt 95) {
@@ -194,6 +277,16 @@ Register-AutoDoctorModule -Name "Root Cause Analysis" -Execute {
         Warning  = @($orderedFindings | Where-Object Severity -eq "Warning").Count
         Critical = @($orderedFindings | Where-Object Severity -eq "Critical").Count
     }
+    $categoryPenaltySummary = @($penaltyBreakdown |
+            Group-Object Category |
+            ForEach-Object {
+                [PSCustomObject]@{
+                    Category     = $_.Name
+                    TotalPenalty = [int](($_.Group | Measure-Object -Property Penalty -Sum).Sum)
+                    Findings     = @($_.Group)
+                }
+            } |
+            Sort-Object TotalPenalty -Descending)
 
     $summary = if ($orderedFindings.Count -eq 0) {
         "No major issues detected"
@@ -210,12 +303,37 @@ Register-AutoDoctorModule -Name "Root Cause Analysis" -Execute {
         HealthText  = ("{0} / 100" -f $roundedScore)
         Summary     = $summary
         Details     = [PSCustomObject]@{
-            Findings         = @($orderedFindings)
-            DetectedIssues   = @($detectedIssues)
-            SeverityCounts   = $severityCounts
-            Anomalies        = if ($AnomalyObj -and $AnomalyObj.Findings) { @($AnomalyObj.Findings) } else { @() }
-            Correlations     = if ($CorrelationObj -and $CorrelationObj.Findings) { @($CorrelationObj.Findings) } else { @() }
-            ValidationIssues = if ($ValidationObj -and $ValidationObj.Findings) { @($ValidationObj.Findings) } else { @() }
+            Findings           = @($orderedFindings)
+            DetectedIssues     = @($detectedIssues)
+            SeverityCounts     = $severityCounts
+            Anomalies          = if ($AnomalyObj -and $AnomalyObj.Findings) { @($AnomalyObj.Findings) } else { @() }
+            Correlations       = if ($CorrelationObj -and $CorrelationObj.Findings) { @($CorrelationObj.Findings) } else { @() }
+            ValidationIssues   = if ($ValidationObj -and $ValidationObj.Findings) { @($ValidationObj.Findings) } else { @() }
+            ScoreBreakdown     = [PSCustomObject]@{
+                Findings  = @($penaltyBreakdown)
+                Categories = @($categoryPenaltySummary)
+            }
+            HistoricalAnalysis = if ($historyAnalysis) {
+                [PSCustomObject]@{
+                    CPUTrend     = @($historyAnalysis.CPUTrend)
+                    MemoryTrend  = @($historyAnalysis.MemoryTrend)
+                    DiskTrend    = @($historyAnalysis.DiskTrend)
+                    NetworkTrend = @($historyAnalysis.NetworkTrend)
+                    MetricStates = @($historyAnalysis.MetricStates)
+                    TrendWindow  = $historyAnalysis.TrendWindow
+                }
+            }
+            else {
+                $null
+            }
+            TrendSummary       = if ($historyAnalysis) { @($historyAnalysis.TrendSummary) } else { @() }
+            MetricStates       = if ($historyAnalysis) { @($historyAnalysis.MetricStates) } else { @() }
+            SustainedIssues    = if ($historyAnalysis) { @($historyAnalysis.SustainedIssues) } else { @() }
+            TransientIssues    = if ($historyAnalysis) { @($historyAnalysis.TransientIssues) } else { @() }
+            BaselineDeviations = if ($historyAnalysis) { @($historyAnalysis.BaselineDeviations) } else { @() }
+            GradualTrends      = if ($historyAnalysis) { @($historyAnalysis.GradualTrends) } else { @() }
+            PersistentAnomalies = if ($AnomalyObj -and $AnomalyObj.PersistentFindings) { @($AnomalyObj.PersistentFindings) } else { @() }
+            TransientAnomalies  = if ($AnomalyObj -and $AnomalyObj.TransientFindings) { @($AnomalyObj.TransientFindings) } else { @() }
         }
     }
 }

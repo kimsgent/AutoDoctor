@@ -65,6 +65,7 @@ try {
         "windowsupdate.ps1",
         "windowspatches.ps1",
         "validation.ps1",
+        "history.ps1",
         "anomaly.ps1",
         "correlation.ps1",
         "rootcause.ps1",
