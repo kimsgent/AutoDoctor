@@ -150,11 +150,20 @@ Register-AutoDoctorModule -Name "Root Cause Analysis" -Execute {
     $lowDiskWarning = @($diskUsage | Where-Object {
             $freeGb = if ($null -ne $_.FreeGB) { [double]$_.FreeGB } else { $null }
             $usedGb = if ($null -ne $_.UsedGB) { [double]$_.UsedGB } else { $null }
-            $totalGb = if ($null -ne $freeGb -and $null -ne $usedGb) { $freeGb + $usedGb } else { 0 }
-            $percentFree = if ($totalGb -gt 0) { ($freeGb / $totalGb) * 100 } else { $null }
 
-            ($null -ne $freeGb -and $freeGb -lt 5) -or
-            ($null -ne $percentFree -and $percentFree -lt 10)
+            if ($null -eq $freeGb -or $null -eq $usedGb) {
+                return $false
+            }
+
+            $totalGb = $freeGb + $usedGb
+
+            if ($totalGb -le 0) {
+                return $false
+            }
+
+            $percentFree = ($freeGb / $totalGb) * 100
+
+            ($freeGb -lt 5) -or ($percentFree -lt 10)
         })
 
     if ($lowDiskWarning.Count -gt 0) {

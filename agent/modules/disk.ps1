@@ -7,18 +7,51 @@ Register-AutoDoctorModule -Name "Disk Analysis" -Execute {
     # --- Disk Space ---
     $disk = @()
     $diskRaw = Invoke-Safe {
-        Get-PSDrive -PSProvider FileSystem | Select-Object Name,
-        @{Name = "FreeGB"; Expression = { [math]::Round($_.Free / 1GB, 2) } },
-        @{Name = "UsedGB"; Expression = { [math]::Round(($_.Used) / 1GB, 2) } }
+        Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop |
+        ForEach-Object {
+            $sizeGb = if ($null -ne $_.Size) { [math]::Round([double]$_.Size / 1GB, 2) } else { $null }
+            $freeGb = if ($null -ne $_.FreeSpace) { [math]::Round([double]$_.FreeSpace / 1GB, 2) } else { $null }
+
+            if ($null -eq $sizeGb -or $null -eq $freeGb -or $sizeGb -le 0) {
+                return
+            }
+
+            [PSCustomObject]@{
+                Name   = ([string]$_.DeviceID).TrimEnd(":")
+                FreeGB = $freeGb
+                UsedGB = [math]::Round(($sizeGb - $freeGb), 2)
+            }
+        }
+    }
+
+    if (-not $diskRaw) {
+        $diskRaw = Invoke-Safe {
+            Get-PSDrive -PSProvider FileSystem |
+            Where-Object {
+                $_.Name -match '^[A-Za-z]$' -and
+                $_.Root -match '^[A-Za-z]:\\$' -and
+                -not $_.DisplayRoot -and
+                $null -ne $_.Free -and
+                $null -ne $_.Used -and
+                (($_.Used + $_.Free) -gt 0)
+            } |
+            Select-Object Name,
+            @{Name = "FreeGB"; Expression = { [math]::Round([double]$_.Free / 1GB, 2) } },
+            @{Name = "UsedGB"; Expression = { [math]::Round([double]$_.Used / 1GB, 2) } }
+        }
     }
 
     if ($diskRaw) {
         $disk = @($diskRaw | ForEach-Object {
                 [PSCustomObject]@{
                     Name   = [string]$_.Name
-                    FreeGB = if ($null -ne $_.FreeGB) { [math]::Round([double]$_.FreeGB, 2) } else { 0 }
-                    UsedGB = if ($null -ne $_.UsedGB) { [math]::Round([double]$_.UsedGB, 2) } else { 0 }
+                    FreeGB = if ($null -ne $_.FreeGB) { [math]::Round([double]$_.FreeGB, 2) } else { $null }
+                    UsedGB = if ($null -ne $_.UsedGB) { [math]::Round([double]$_.UsedGB, 2) } else { $null }
                 }
+            } | Where-Object {
+                $null -ne $_.FreeGB -and
+                $null -ne $_.UsedGB -and
+                (($_.FreeGB + $_.UsedGB) -gt 0)
             })
     }
 
