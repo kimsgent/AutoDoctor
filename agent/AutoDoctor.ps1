@@ -162,7 +162,7 @@ function Add-Section {
 
         # Array of objects -> render table
         if ($Content[0] -is [psobject] -and $Content[0].PSObject.Properties.Count -gt 0) {
-            $contentHtml = $Content | ConvertTo-Html -Fragment
+            $contentHtml = @($Content | ConvertTo-Html -Fragment) -join "`n"
         }
         else {
             # Array of strings -> bullet list
@@ -175,7 +175,7 @@ function Add-Section {
     }
     elseif ($Content -is [psobject]) {
         # Handle objects -> render table
-        $contentHtml = $Content | ConvertTo-Html -Fragment
+        $contentHtml = @($Content | ConvertTo-Html -Fragment) -join "`n"
     }
     else {
         # Default -> simple paragraph
