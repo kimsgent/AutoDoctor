@@ -51,8 +51,32 @@ try {
     # Ensure a clean module registry for repeated bootstrap runs.
     $Global:AutoDoctorModules = @()
 
+    $moduleLoadOrder = @(
+        "systeminfo.ps1",
+        "uptime.ps1",
+        "memory.ps1",
+        "cpu.ps1",
+        "disk.ps1",
+        "network.ps1",
+        "events.ps1",
+        "startup.ps1",
+        "software.ps1",
+        "drivers.ps1",
+        "windowsupdate.ps1",
+        "windowspatches.ps1",
+        "validation.ps1",
+        "history.ps1",
+        "anomaly.ps1",
+        "correlation.ps1",
+        "rootcause.ps1",
+        "remediation.ps1"
+    )
+
     Get-ChildItem "$PSScriptRoot\modules\*.ps1" |
-        Sort-Object Name |
+        Sort-Object {
+            $index = $moduleLoadOrder.IndexOf($_.Name)
+            if ($index -ge 0) { $index } else { [int]::MaxValue }
+        }, Name |
         Where-Object { $_.BaseName -ne "remediation" } |
         ForEach-Object { . $_.FullName }
 

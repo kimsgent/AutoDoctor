@@ -36,16 +36,19 @@ catch {
 }
 
 function Initialize-AutoDoctorDatabase {
+    $connection = $null
 
-    if (!(Test-Path $Global:AutoDoctorDBPath)) {
-
+    try {
         $connection = New-Object System.Data.SQLite.SQLiteConnection("Data Source=$Global:AutoDoctorDBPath;Version=3;")
         $connection.Open()
 
         . "$PSScriptRoot\db.schema.ps1"
 
         Initialize-AutoDoctorSchema -Connection $connection
-
-        $connection.Close()
+    }
+    finally {
+        if ($connection) {
+            $connection.Close()
+        }
     }
 }

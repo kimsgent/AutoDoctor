@@ -35,6 +35,285 @@ function Get-SafeModuleResult {
     return $mod.Result
 }
 
+function Get-AutoDoctorMetricUnit {
+    param([string]$Metric)
+
+    switch ($Metric) {
+        "CPU" { return "%" }
+        "Memory" { return "%" }
+        "Disk" { return "%" }
+        "Network" { return " ms" }
+        default { return "" }
+    }
+}
+
+function Format-AutoDoctorMetricValue {
+    param(
+        [string]$Metric,
+        $Value
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return "n/a"
+    }
+
+    $number = [double]$Value
+    return ("{0}{1}" -f ([math]::Round($number, 2)), (Get-AutoDoctorMetricUnit -Metric $Metric))
+}
+
+function Format-AutoDoctorDeltaValue {
+    param(
+        [string]$Metric,
+        $Value
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return "n/a"
+    }
+
+    $number = [double]$Value
+    $sign = if ($number -gt 0) { "+" } else { "" }
+    return ("{0}{1}{2}" -f $sign, ([math]::Round($number, 2)), (Get-AutoDoctorMetricUnit -Metric $Metric))
+}
+
+function Get-AutoDoctorStateCssClass {
+    param([string]$State)
+
+    $normalizedState = if ($State) { $State.ToLowerInvariant() } else { "" }
+
+    switch ($normalizedState) {
+        "sustained" { return "state-critical" }
+        "baseline deviation" { return "state-baseline" }
+        "transient" { return "state-warning" }
+        "increasing" { return "state-warning" }
+        "decreasing" { return "state-improving" }
+        "recovering" { return "state-improving" }
+        default { return "state-stable" }
+    }
+}
+
+function Get-AutoDoctorDirectionDisplay {
+    param(
+        [string]$DirectionIcon,
+        [string]$Direction
+    )
+
+    $normalized = if ($DirectionIcon) { $DirectionIcon.ToLowerInvariant() } else { "" }
+
+    switch ($normalized) {
+        "up" { return "&uarr;" }
+        "down" { return "&darr;" }
+        "flat" { return "&rarr;" }
+    }
+
+    switch ($Direction) {
+        "Increasing" { return "&uarr;" }
+        "Decreasing" { return "&darr;" }
+        default { return "&rarr;" }
+    }
+}
+
+function ConvertTo-AutoDoctorCardHtml {
+    param(
+        [Parameter(Mandatory = $true)][string]$Title,
+        [Parameter(Mandatory = $true)][string]$Body,
+        [switch]$FullWidth,
+        [switch]$Collapsible,
+        [switch]$Expanded,
+        [string]$SummaryText = ""
+    )
+
+    $className = if ($FullWidth) { "card full" } else { "card" }
+
+    if ($Collapsible) {
+        $openAttr = if ($Expanded) { " open" } else { "" }
+        $meta = if ($SummaryText) { "<span class='summary-meta'>$SummaryText</span>" } else { "" }
+
+        return @"
+<details class='$className card-collapse'$openAttr>
+<summary><span>$Title</span>$meta<span class='summary-icon'>+</span></summary>
+<div class='card-content'>
+$Body
+</div>
+</details>
+"@
+    }
+
+    return @"
+<div class='$className'>
+<h2>$Title</h2>
+$Body
+</div>
+"@
+}
+
+function Convert-AutoDoctorFindingsToHtml {
+    param(
+        [array]$Findings,
+        [string]$Title,
+        [switch]$Collapsible,
+        [switch]$Expanded
+    )
+
+    if (-not $Findings -or $Findings.Count -eq 0) {
+        return ""
+    }
+
+    $rows = $Findings | ConvertTo-Html -Fragment
+    return ConvertTo-AutoDoctorCardHtml -Title $Title -Body $rows -FullWidth -Collapsible:$Collapsible -Expanded:$Expanded -SummaryText ("{0} item{1}" -f $Findings.Count, $(if ($Findings.Count -eq 1) { "" } else { "s" }))
+}
+
+function Convert-AutoDoctorTrendSummaryToHtml {
+    param(
+        [array]$MetricStates,
+        $TrendWindow
+    )
+
+    if (-not $MetricStates -or $MetricStates.Count -eq 0) {
+        return ""
+    }
+
+    $scope = if ($TrendWindow -and $TrendWindow.WindowLabel) {
+        "<p class='card-meta'>$($TrendWindow.WindowLabel) | $($TrendWindow.HistoricalSamples + 1) samples</p>"
+    }
+    else {
+        ""
+    }
+
+    $rows = @($MetricStates | ForEach-Object {
+            $stateClass = Get-AutoDoctorStateCssClass -State $_.State
+            @"
+<div class='metric-row'>
+  <div class='metric-main'>
+    <span class='metric-name'>$($_.Metric)</span>
+    <span class='state-badge $stateClass'>$($_.State)</span>
+  </div>
+  <div class='metric-stats'>
+    <span>Current: <b>$(Format-AutoDoctorMetricValue -Metric $_.Metric -Value $_.Current)</b></span>
+    <span>Baseline: $(Format-AutoDoctorMetricValue -Metric $_.Metric -Value $_.Baseline)</span>
+    <span>Threshold: $(Format-AutoDoctorMetricValue -Metric $_.Metric -Value $_.Threshold)</span>
+    <span>Delta: $(Format-AutoDoctorDeltaValue -Metric $_.Metric -Value $_.DeltaFromBaseline)</span>
+  </div>
+  <div class='metric-trend'>
+    <span class='direction-indicator'>$(Get-AutoDoctorDirectionDisplay -DirectionIcon $_.DirectionIcon -Direction $_.Direction)</span>
+    <span>$($_.Direction)</span>
+  </div>
+</div>
+"@
+        }) -join "`n"
+
+    return ConvertTo-AutoDoctorCardHtml -Title "Trend Summary" -Body ($scope + "<div class='metric-board'>$rows</div>")
+}
+
+function Convert-AutoDoctorStateStripToHtml {
+    param([array]$MetricStates)
+
+    if (-not $MetricStates -or $MetricStates.Count -eq 0) {
+        return ""
+    }
+
+    $items = @($MetricStates | ForEach-Object {
+            $stateClass = Get-AutoDoctorStateCssClass -State $_.State
+            "<div class='state-tile'><span class='state-label'>$($_.Metric)</span><span class='state-badge $stateClass'>$($_.State)</span></div>"
+        }) -join "`n"
+
+    return ConvertTo-AutoDoctorCardHtml -Title "Current State" -Body "<div class='state-strip'>$items</div>" -FullWidth
+}
+
+function Convert-AutoDoctorScoreExplanationToHtml {
+    param(
+        $ScoreBreakdown,
+        [array]$MetricStates
+    )
+
+    if (-not $ScoreBreakdown -or -not $ScoreBreakdown.Categories) {
+        return ""
+    }
+
+    $topCategory = @($ScoreBreakdown.Categories | Select-Object -First 1)
+    $topFindingLines = if ($topCategory.Count -gt 0) {
+        @($topCategory[0].Findings | Select-Object -First 3 | ForEach-Object {
+                "<li>$($_.Message)</li>"
+            }) -join ""
+    }
+    else {
+        ""
+    }
+
+    $stableMetrics = @($MetricStates | Where-Object { $_.State -eq "Stable" -or $_.State -eq "Decreasing" })
+    $stableText = if ($stableMetrics.Count -gt 0) {
+        ($stableMetrics | ForEach-Object { "$($_.Metric): $($_.State)" }) -join " | "
+    }
+    else {
+        "No clearly stable metrics in this run"
+    }
+
+    $supporting = @($ScoreBreakdown.Categories | Select-Object -Skip 1 -First 2 | ForEach-Object { "$($_.Category) ($($_.TotalPenalty))" }) -join " | "
+
+    $body = @"
+<div class='score-explainer'>
+  <p><b>Primary driver:</b> $(if ($topCategory.Count -gt 0) { "$($topCategory[0].Category) (penalty $($topCategory[0].TotalPenalty))" } else { "n/a" })</p>
+  <ul>$topFindingLines</ul>
+  <p><b>Supporting factors:</b> $(if ($supporting) { $supporting } else { "None beyond primary driver" })</p>
+  <p><b>Stable components:</b> $stableText</p>
+</div>
+"@
+
+    return ConvertTo-AutoDoctorCardHtml -Title "Why The Score Changed" -Body $body -FullWidth
+}
+
+function Convert-AutoDoctorSectionToHtml {
+    param($Section)
+
+    if ($Section -is [string]) {
+        return ConvertTo-AutoDoctorCardHtml -Title "Details" -Body $Section -FullWidth
+    }
+
+    if (-not $Section) {
+        return ""
+    }
+
+    $summaryText = ""
+
+    if ($Section.Collapsible -and $Section.ContentHtml) {
+        $summaryText = if ($Section.ContentHtml -match "<tr>") { "Click to expand" } else { "" }
+    }
+
+    return ConvertTo-AutoDoctorCardHtml `
+        -Title ([string]$Section.Title) `
+        -Body ([string]$Section.ContentHtml) `
+        -FullWidth:([bool]$Section.FullWidth) `
+        -Collapsible:([bool]$Section.Collapsible) `
+        -Expanded:([bool]$Section.Expanded) `
+        -SummaryText $summaryText
+}
+
+function Get-AutoDoctorDetailCollection {
+    param($Value)
+
+    if ($null -eq $Value) {
+        return ,([object[]]@())
+    }
+
+    if ($Value -is [System.Array]) {
+        return ,([object[]]@($Value))
+    }
+
+    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string] -and $Value -isnot [psobject]) {
+        return ,([object[]]@($Value))
+    }
+
+    if ($Value -is [psobject]) {
+        $propertyNames = @($Value.PSObject.Properties.Name)
+        $meaningfulPropertyNames = @($propertyNames | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        if ($meaningfulPropertyNames.Count -eq 0) {
+            return ,([object[]]@())
+        }
+    }
+
+    return ,([object[]]@($Value))
+}
+
 
 # -----------------------------------------------------------------------------
 # HTML REPORT FUNCTION
@@ -57,6 +336,7 @@ h2{margin-top:0;font-size:18px}
 .dashboard{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}
 .card{background:white;padding:18px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1)}
 .full{grid-column:1 / span 2}
+.card-meta{margin:0 0 14px 0;color:#667085;font-size:13px}
 table{border-collapse:collapse;width:100%;margin-top:10px}
 td,th{border:1px solid #ddd;padding:6px}
 th{background:#f2f2f2}
@@ -81,6 +361,35 @@ font-weight:bold;
 margin:auto;
 background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
 }
+.metric-board{display:flex;flex-direction:column;gap:12px}
+.metric-row{display:grid;grid-template-columns:1.2fr 2.5fr 0.8fr;gap:12px;align-items:center;padding:12px;border:1px solid #e6eaf0;border-radius:10px;background:#fafbfd}
+.metric-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.metric-name{font-weight:700;color:#1f4e79}
+.metric-stats{display:flex;gap:12px;flex-wrap:wrap;color:#374151;font-size:13px}
+.metric-trend{display:flex;align-items:center;gap:8px;justify-content:flex-end;font-weight:600;color:#344054}
+.direction-indicator{font-size:18px;color:#1f4e79}
+.state-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.state-tile{display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid #e6eaf0;border-radius:10px;background:#fafbfd}
+.state-label{font-weight:700;color:#1f4e79}
+.state-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.state-stable{background:#eef2f6;color:#44546a}
+.state-warning{background:#fff3d6;color:#9a6700}
+.state-critical{background:#fbe4e6;color:#b42318}
+.state-baseline{background:#ffe5d0;color:#b54708}
+.state-improving{background:#dff6eb;color:#027a48}
+.score-explainer p{margin:0 0 10px 0}
+.score-explainer ul{margin:0 0 10px 18px;padding:0}
+.card-collapse{padding:0;overflow:hidden}
+.card-collapse summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;padding:18px;font-weight:700;color:#1f4e79}
+.card-collapse summary::-webkit-details-marker{display:none}
+.card-collapse .card-content{padding:0 18px 18px 18px}
+.summary-meta{font-weight:400;font-size:12px;color:#667085;margin-left:auto}
+.summary-icon{font-size:20px;line-height:1;color:#667085}
+.card-collapse[open] .summary-icon{transform:rotate(45deg)}
+@media (max-width: 900px){
+  .metric-row{grid-template-columns:1fr}
+  .metric-trend{justify-content:flex-start}
+}
 </style>
 "@
 
@@ -90,6 +399,7 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
     $rootModule = $ModuleResults | Where-Object Module -eq "Root Cause Analysis"
     $score = if ($rootModule) { $rootModule.Result.HealthScore } else { 0 }
     $displayText = if ($rootModule) { $rootModule.Result.HealthText } else { "$score / 100" }
+    $rootDetails = if ($rootModule -and $rootModule.Result) { $rootModule.Result.Details } else { $null }
 
     if ($score -lt 0) { $score = 0 }
     if ($score -gt 100) { $score = 100 }
@@ -221,11 +531,51 @@ background:conic-gradient(#ff6f00 var(--cpu), #e6e6e6 0);
 "@
     } else { $diskChart = "" }
 
+    $severityPanel = ""
+    $findingsPanel = ""
+    $anomalyPanel = ""
+    $correlationPanel = ""
+    $trendSummaryPanel = ""
+    $stateStripPanel = ""
+    $scoreExplanationPanel = ""
+    $sustainedPanel = ""
+    $transientPanel = ""
+    $baselinePanel = ""
+    $rootSummaryPanel = ""
+
+    if ($rootDetails) {
+        if ($rootDetails.SeverityCounts) {
+            $severityRows = @(
+                [PSCustomObject]@{ Severity = "Critical"; Count = $rootDetails.SeverityCounts.Critical }
+                [PSCustomObject]@{ Severity = "Warning"; Count = $rootDetails.SeverityCounts.Warning }
+                [PSCustomObject]@{ Severity = "Info"; Count = $rootDetails.SeverityCounts.Info }
+            ) | ConvertTo-Html -Fragment
+
+            $severityPanel = @"
+<div class='card'>
+<h2>Severity Summary</h2>
+$severityRows
+</div>
+"@
+        }
+
+        $rootSummaryPanel = ConvertTo-AutoDoctorCardHtml -Title "Root Cause Summary" -Body "<p>$($rootModule.Result.Summary)</p>" -FullWidth
+        $findingsPanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.Findings) -Title "Root Cause Findings" -Collapsible
+        $anomalyPanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.Anomalies) -Title "Anomaly Insights" -Collapsible
+        $correlationPanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.Correlations) -Title "Correlation Insights" -Collapsible
+        $trendSummaryPanel = Convert-AutoDoctorTrendSummaryToHtml -MetricStates @($rootDetails.MetricStates) -TrendWindow $rootDetails.HistoricalAnalysis.TrendWindow
+        $stateStripPanel = Convert-AutoDoctorStateStripToHtml -MetricStates @($rootDetails.MetricStates)
+        $scoreExplanationPanel = Convert-AutoDoctorScoreExplanationToHtml -ScoreBreakdown $rootDetails.ScoreBreakdown -MetricStates @($rootDetails.MetricStates)
+        $sustainedPanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.SustainedIssues) -Title "Sustained Issues" -Expanded
+        $transientPanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.TransientIssues) -Title "Transient Issues" -Collapsible
+        $baselinePanel = Convert-AutoDoctorFindingsToHtml -Findings @($rootDetails.BaselineDeviations) -Title "Baseline Deviations" -Expanded
+    }
+
     # -----------------------------
     # JOIN MODULE SECTIONS
     # -----------------------------
-    if (-not $Sections) { $Sections = @("<p>No module results available.</p>") }
-    $body = ($Sections | ForEach-Object { "<div class='card full'>$_</div>" }) -join "`n"
+    if (-not $Sections) { $Sections = @([PSCustomObject]@{ Title = "Details"; ContentHtml = "<p>No module results available.</p>"; Expanded = $true; Collapsible = $false; FullWidth = $true }) }
+    $body = ($Sections | ForEach-Object { Convert-AutoDoctorSectionToHtml -Section $_ }) -join "`n"
 
     # -----------------------------
     # FINAL HTML
@@ -271,7 +621,7 @@ Generated: $reportTime
 
         $updateFooterHTML = @"
 <div style='text-align:center; margin-top:10px; color:#cc3300; font-size:14px;'>
-  Update available: v$latestVersion (current: v$currentVersion) —
+  Update available: v$latestVersion (current: v$currentVersion) -
   <a href='$repoUrl' target='_blank'>Download here</a>
 </div>
 "@
@@ -389,9 +739,20 @@ $logoHTML
 <div class='dashboard'>
 
 $healthVisual
+$severityPanel
 $memChart
 $cpuChart
+$trendSummaryPanel
+$stateStripPanel
 $diskChart
+$rootSummaryPanel
+$scoreExplanationPanel
+$sustainedPanel
+$transientPanel
+$baselinePanel
+$findingsPanel
+$anomalyPanel
+$correlationPanel
 $body
 
 </div>
@@ -559,6 +920,58 @@ function New-AutoDoctorJsonReport {
     } else {
         "No Root Cause Analysis executed"
     }
+    $rootDetails = if ($rootResult -and $rootResult.Result -and $rootResult.Result.Details) {
+        [PSCustomObject]@{
+            Findings           = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.Findings
+            DetectedIssues     = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.DetectedIssues
+            SeverityCounts     = if ($rootResult.Result.Details.SeverityCounts) {
+                $rootResult.Result.Details.SeverityCounts
+            }
+            else {
+                [PSCustomObject]@{
+                    Info     = 0
+                    Warning  = 0
+                    Critical = 0
+                }
+            }
+            Anomalies          = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.Anomalies
+            Correlations       = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.Correlations
+            ValidationIssues   = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.ValidationIssues
+            ScoreBreakdown     = if ($rootResult.Result.Details.ScoreBreakdown) {
+                [PSCustomObject]@{
+                    Findings   = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.ScoreBreakdown.Findings
+                    Categories = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.ScoreBreakdown.Categories
+                }
+            }
+            else {
+                $null
+            }
+            TrendSummary       = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.TrendSummary
+            MetricStates       = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.MetricStates
+            SustainedIssues    = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.SustainedIssues
+            TransientIssues    = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.TransientIssues
+            BaselineDeviations = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.BaselineDeviations
+            GradualTrends      = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.GradualTrends
+            PersistentAnomalies = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.PersistentAnomalies
+            TransientAnomalies  = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.TransientAnomalies
+            HistoricalAnalysis = if ($rootResult.Result.Details.HistoricalAnalysis) {
+                [PSCustomObject]@{
+                    CPUTrend     = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.HistoricalAnalysis.CPUTrend
+                    MemoryTrend  = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.HistoricalAnalysis.MemoryTrend
+                    DiskTrend    = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.HistoricalAnalysis.DiskTrend
+                    NetworkTrend = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.HistoricalAnalysis.NetworkTrend
+                    MetricStates = Get-AutoDoctorDetailCollection -Value $rootResult.Result.Details.HistoricalAnalysis.MetricStates
+                    TrendWindow  = $rootResult.Result.Details.HistoricalAnalysis.TrendWindow
+                }
+            }
+            else {
+                $null
+            }
+        }
+    }
+    else {
+        $null
+    }
 
     # -------------------------
     # HEALTH SCORE (JSON)
@@ -654,6 +1067,7 @@ function New-AutoDoctorJsonReport {
         WindowsPatchHistory  = ($ModuleResults | Where-Object Module -eq "Windows Patch History").Result
         Drivers              = ($ModuleResults | Where-Object Module -eq "Driver Inventory").Result
         RootCauseAnalysis    = $rootCauseAnalysis
+        RootCauseDetails     = $rootDetails
         HealthScore          = $healthScore
         AutomaticRemediation = $automaticRemediation
         ExecutionStats       = $executionStats

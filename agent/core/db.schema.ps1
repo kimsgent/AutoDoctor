@@ -80,6 +80,41 @@ ON system_info(hostname, timestamp);
 "@
 
     $commands += @"
+CREATE TABLE IF NOT EXISTS telemetry_trends (
+    timestamp TEXT,
+    cpu REAL,
+    memory REAL,
+    disk REAL,
+    network REAL
+);
+"@
+
+    $commands += @"
+CREATE INDEX IF NOT EXISTS idx_telemetry_trends_timestamp
+ON telemetry_trends(timestamp);
+"@
+
+    $commands += @"
+CREATE TABLE IF NOT EXISTS telemetry_baselines (
+    hostname TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    window_hours INTEGER NOT NULL,
+    sample_count INTEGER NOT NULL,
+    avg_value REAL,
+    min_value REAL,
+    max_value REAL,
+    stddev REAL,
+    updated_at TEXT,
+    PRIMARY KEY (hostname, metric, window_hours)
+);
+"@
+
+    $commands += @"
+CREATE INDEX IF NOT EXISTS idx_telemetry_baselines_updated_at
+ON telemetry_baselines(updated_at);
+"@
+
+    $commands += @"
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT,
