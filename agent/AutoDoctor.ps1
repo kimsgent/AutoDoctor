@@ -373,10 +373,10 @@ foreach ($mod in $moduleResults) {
 # -----------------------------
 # ROOT CAUSE & HEALTH SCORE
 # -----------------------------
+# Report generation and persistence pull summary/health directly from
+# $ModuleResults, so the local root module is only needed here for
+# additional section extraction.
 $rootModule = $moduleResults | Where-Object Module -eq "Root Cause Analysis"
-
-$issuesText = $rootModule.Result.Summary
-$healthText = $rootModule.Result.HealthText
 $engineRuntime = ($moduleResults | Where-Object Module -eq "Engine Runtime").Result.ScriptRuntimeSeconds
 
 $execText = if ($engineRuntime) {
