@@ -5,27 +5,50 @@
 Register-AutoDoctorModule -Name "Network Analysis" -Execute {
 
     # --- Connectivity Test ---
-    $networkTest = Invoke-Safe { Test-Connection google.com -Count 6 }
+    $networkTest = @()
+    $networkRaw = Invoke-Safe { Test-Connection google.com -Count 6 }
+    if ($networkRaw) {
+        $networkTest = @($networkRaw)
+    }
 
-    $received = if ($networkTest) { $networkTest | Where-Object { $_.StatusCode -eq 0 } } else { @() }
+    $received = if ($networkTest.Count -gt 0) { @($networkTest | Where-Object { $_.StatusCode -eq 0 }) } else { @() }
 
-    $avgLatency = if ($networkTest) {
-        ($networkTest | Measure-Object ResponseTime -Average).Average
+    $avgLatency = if ($received.Count -gt 0) {
+        ($received | Measure-Object ResponseTime -Average).Average
     } else { 0 }
 
+    $connectivityStatus = if ($networkTest.Count -eq 0) {
+        "Unavailable"
+    } elseif ($received.Count -eq 0) {
+        "Unreachable"
+    } else {
+        "Reachable"
+    }
+
     $netObj = [PSCustomObject]@{
-        PacketsSent     = if ($networkTest) { $networkTest.Count } else { 0 }
+        PacketsSent     = $networkTest.Count
         PacketsReceived = $received.Count
-        AvgLatencyMS    = [math]::Round($avgLatency, 2)
+        AvgLatencyMS    = [math]::Round([double]$avgLatency, 2)
+        Status          = $connectivityStatus
     }
 
     # --- Network Adapters ---
-    $adapters = Invoke-Safe { Get-NetAdapter | Select-Object Name, Status, LinkSpeed }
+    $adapters = @()
+    $adaptersRaw = Invoke-Safe { Get-NetAdapter | Select-Object Name, Status, LinkSpeed }
+    if ($adaptersRaw) {
+        $adapters = @($adaptersRaw | ForEach-Object {
+                [PSCustomObject]@{
+                    Name      = [string]$_.Name
+                    Status    = [string]$_.Status
+                    LinkSpeed = [string]$_.LinkSpeed
+                }
+            })
+    }
 
     # Return structured object
     $networkObj = [PSCustomObject]@{
-        Connectivity   = $netObj
-        Adapters       = $adapters
+        Connectivity = $netObj
+        Adapters     = @($adapters)
     }
 
     return $networkObj

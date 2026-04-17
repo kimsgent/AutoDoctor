@@ -2,18 +2,80 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build AutoDoctor Installer (venv)",
+      "label": "Initialize AutoDoctor",
       "type": "shell",
-      "command": "pwsh",
+      "command": "powershell.exe",
       "args": [
         "-NoLogo",
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "${workspaceFolder}/installer/Build-AutoDoctor.ps1",
-        "-PythonExe",
-        "${workspaceFolder}/server/api/.venv/Scripts/python.exe"
+        "${workspaceFolder}/agent/Initialize-AutoDoctor.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run AutoDoctor Agent",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/agent/AutoDoctor.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Dashboard API",
+      "type": "shell",
+      "command": "${workspaceFolder}/server/api/.venv/Scripts/python.exe",
+      "args": [
+        "${workspaceFolder}/server/api/run_autodoctor.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/server/api",
+        "env": {
+          "AUTO_DOCTOR_HOME": "${workspaceFolder}"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build AutoDoctor Installer",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/installer/Build-AutoDoctor.ps1"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -30,9 +92,9 @@
       "problemMatcher": []
     },
     {
-      "label": "Build AutoDoctor (Skip Installer, venv)",
+      "label": "Build AutoDoctor (Skip Installer)",
       "type": "shell",
-      "command": "pwsh",
+      "command": "powershell.exe",
       "args": [
         "-NoLogo",
         "-NoProfile",
@@ -40,9 +102,7 @@
         "Bypass",
         "-File",
         "${workspaceFolder}/installer/Build-AutoDoctor.ps1",
-        "-SkipInstaller",
-        "-PythonExe",
-        "${workspaceFolder}/server/api/.venv/Scripts/python.exe"
+        "-SkipInstaller"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

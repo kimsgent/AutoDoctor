@@ -31,8 +31,10 @@ OutputDir=output
 OutputBaseFilename=AutoDoctor_Installer_{#MyAppVersion}
 Compression=lzma
 SolidCompression=yes
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+; Use x64compatible so the 64-bit installer can also target platforms such as
+; Windows on ARM that support x64 application compatibility.
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 ChangesEnvironment=yes
 WizardStyle=modern
@@ -113,9 +115,9 @@ Name: "{commondesktop}\Open AutoDoctor Dashboard"; Filename: "{cmd}"; Parameters
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoLogo -NoProfile -ExecutionPolicy Bypass -File ""{app}\agent\Initialize-AutoDoctor.ps1"""; Flags: runhidden waituntilterminated; Tasks: seedbootstrap; StatusMsg: "Initializing AutoDoctor schema and first telemetry snapshot..."
-Filename: "{app}\server\api\autodoctor_service.exe"; Parameters: "--startup auto update"; Flags: runhidden waituntilterminated; Check: IsTaskSelected('servicebundled') and ServiceExists('{#MyServiceName}'); StatusMsg: "Updating AutoDoctor API service..."
-Filename: "{app}\server\api\autodoctor_service.exe"; Parameters: "--startup auto install"; Flags: runhidden waituntilterminated; Check: IsTaskSelected('servicebundled') and (not ServiceExists('{#MyServiceName}')); StatusMsg: "Registering AutoDoctor API service..."
-Filename: "{app}\server\api\autodoctor_service.exe"; Parameters: "start"; Flags: runhidden waituntilterminated; Check: IsTaskSelected('servicebundled'); StatusMsg: "Starting AutoDoctor API service..."
+Filename: "{app}\server\api\autodoctor_service.exe"; Parameters: "--startup auto update"; Flags: runhidden waituntilterminated; Check: WizardIsTaskSelected('servicebundled') and ServiceExists('{#MyServiceName}'); StatusMsg: "Updating AutoDoctor API service..."
+Filename: "{app}\server\api\autodoctor_service.exe"; Parameters: "--startup auto install"; Flags: runhidden waituntilterminated; Check: WizardIsTaskSelected('servicebundled') and (not ServiceExists('{#MyServiceName}')); StatusMsg: "Registering AutoDoctor API service..."
+Filename: "{app}\server\api\autodoctor_service.exe"; Parameters: "start"; Flags: runhidden waituntilterminated; Check: WizardIsTaskSelected('servicebundled'); StatusMsg: "Starting AutoDoctor API service..."
 Filename: "{cmd}"; Parameters: "/c start """" ""{#DashboardURL}"""; Flags: postinstall skipifsilent unchecked; Description: "Open AutoDoctor Dashboard"
 
 [Code]
@@ -369,7 +371,7 @@ end;
 
 procedure ConfigureServiceModeIni();
 begin
-  if IsTaskSelected('servicepython') then
+  if WizardIsTaskSelected('servicepython') then
   begin
     SetIniString('Service', 'mode', 'system_python', ExpandConstant('{app}\config\autodoctor.ini'));
   end
@@ -714,7 +716,7 @@ begin
   begin
     ConfigureServiceModeIni();
 
-    if IsTaskSelected('servicepython') then
+    if WizardIsTaskSelected('servicepython') then
     begin
       InstallServiceUsingSystemPython();
     end;

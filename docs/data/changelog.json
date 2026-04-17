@@ -2,6 +2,25 @@
   "project": "AutoDoctor",
   "versions": [
     {
+      "version": "1.2.0",
+      "date": "2026-04-17",
+      "changes": [
+        "feat(engine): upgrade module execution to pass declared upstream results dynamically",
+        "feat(diagnostics): add structured anomaly, correlation, and validation analysis with weighted health scoring",
+        "feat(history): add recency-aware historical analysis, trend summaries, and visualization across reports and dashboard views",
+        "feat(report): add in-report toolbar with print/export modes and expanded summary/detail panels",
+        "feat(dashboard): extend API and dashboard views for historical diagnostics, severity insights, and report navigation",
+        "fix(ps/perf): improve localized performance counter resolution, naming, and German PhysicalDisk handling",
+        "fix(storage): exclude non-capacity disks from disk health scoring to avoid false penalties",
+        "fix(report): restore HTML section fragment generation for report rendering",
+        "chore(installer): clean up installer packaging flow and architecture guidance for updated engine workflows",
+        "chore(repo): exclude generated cache artifacts from source control",
+        "docs(reporting): refresh health scoring, dashboard, API, runtime path, and print/export guides",
+        "fix(core): remove unused root-cause summary and health text locals from AutoDoctor orchestration"
+      ]
+    },
+
+    {
       "version": "1.1.0",
       "date": "2026-04-04",
       "changes": [

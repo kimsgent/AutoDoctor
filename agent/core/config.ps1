@@ -72,6 +72,8 @@ else {
 
 $Global:AutoDoctorReportHTML = Join-Path $Global:AutoDoctorPaths.Reports "AutoDoctor_Report.html"
 $Global:AutoDoctorReportJSON = Join-Path $Global:AutoDoctorPaths.Reports "AutoDoctor_Report.json"
+$Global:AutoDoctorReportMarkdown = Join-Path $Global:AutoDoctorPaths.Reports "AutoDoctor_Report.md"
+$Global:AutoDoctorReportPDF = Join-Path $Global:AutoDoctorPaths.Reports "AutoDoctor_Report.pdf"
 $Global:AutoDoctorLogFile = Join-Path $Global:AutoDoctorPaths.Logs "autodoctor.log"
 $Global:AutoDoctorConfigINI = Join-Path $Global:AutoDoctorPaths.Config "autodoctor.ini"
 $Global:AutoDoctorVersionFile = Join-Path $Global:AutoDoctorRoot "VERSION"

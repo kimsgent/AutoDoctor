@@ -269,6 +269,12 @@ The installer will:
 4. Update the existing service if present, otherwise install it.
 5. Start the service again.
 
+## Architecture Notes
+
+- Build the packaged executables on a Windows x64 machine with Python 3.12 x64.
+- The installer targets `x64compatible` systems in Inno Setup so it remains valid on 64-bit Windows environments that can run x64 applications, including compatible Windows on ARM configurations.
+- If AutoDoctor later ships native ARM64 executables or architecture-specific binaries, revisit the installer architecture policy and the build pipeline together rather than treating the `.iss` file in isolation.
+
 ## Notes
 
 - The installer intentionally uses `C:\ProgramData\AutoDoctor` as the install root because the current code writes runtime artifacts under the root path.

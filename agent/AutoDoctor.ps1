@@ -135,18 +135,55 @@ function Invoke-Safe {
     }
 }
 
+function ConvertTo-AutoDoctorSectionId {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return "section"
+    }
+
+    $normalized = $Value.ToLowerInvariant()
+    $normalized = [regex]::Replace($normalized, "[^a-z0-9]+", "-")
+    $normalized = $normalized.Trim("-")
+
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return "section"
+    }
+
+    return $normalized
+}
+
 function Add-Section {
 
     param(
         [string]$Title,
-        $Content
+        $Content,
+        [string]$SectionId,
+        [string]$Category = "general",
+        [string]$Tier = "detail",
+        [string]$DataPath,
+        [switch]$Expanded,
+        [switch]$Collapsible
     )
 
-    $html = "<h2>$Title</h2>"
+    $contentHtml = ""
+    $contentType = "text"
+    $resolvedSectionId = if ($SectionId) { $SectionId } else { ConvertTo-AutoDoctorSectionId -Value $Title }
 
     if ($null -eq $Content) {
-        $html += "<p>No data available</p>"
-        return $html
+        $contentHtml = "<p>No data available</p>"
+        return [PSCustomObject]@{
+            SectionId   = $resolvedSectionId
+            Title       = $Title
+            Category    = $Category
+            Tier        = $Tier
+            ContentType = $contentType
+            DataPath    = $DataPath
+            ContentHtml = $contentHtml
+            Expanded    = [bool]$Expanded
+            Collapsible = [bool]$Collapsible
+            FullWidth   = $true
+        }
     }
 
     # Handle arrays
@@ -154,32 +191,41 @@ function Add-Section {
 
         # Array of objects -> render table
         if ($Content[0] -is [psobject] -and $Content[0].PSObject.Properties.Count -gt 0) {
-            $table = $Content | ConvertTo-Html -Fragment
-            $html += $table
+            $contentHtml = @($Content | ConvertTo-Html -Fragment) -join "`n"
+            $contentType = "table"
         }
         else {
             # Array of strings -> bullet list
-            $html += "<ul>"
+            $contentType = "list"
+            $contentHtml += "<ul>"
             foreach ($item in $Content) {
-                $html += "<li>$item</li>"
+                $contentHtml += "<li>$item</li>"
             }
-            $html += "</ul>"
+            $contentHtml += "</ul>"
         }
-
-        return $html
+    }
+    elseif ($Content -is [psobject]) {
+        # Handle objects -> render table
+        $contentHtml = @($Content | ConvertTo-Html -Fragment) -join "`n"
+        $contentType = "table"
+    }
+    else {
+        # Default -> simple paragraph
+        $contentHtml = "<p>$Content</p>"
     }
 
-    # Handle objects -> render table
-    if ($Content -is [psobject]) {
-        $table = $Content | ConvertTo-Html -Fragment
-        $html += $table
-        return $html
+    return [PSCustomObject]@{
+        SectionId   = $resolvedSectionId
+        Title       = $Title
+        Category    = $Category
+        Tier        = $Tier
+        ContentType = $contentType
+        DataPath    = $DataPath
+        ContentHtml = $contentHtml
+        Expanded    = [bool]$Expanded
+        Collapsible = [bool]$Collapsible
+        FullWidth   = $true
     }
-
-    # Default -> simple paragraph
-    $html += "<p>$Content</p>"
-
-    return $html
 }
 
 $Sections = @()
@@ -199,7 +245,32 @@ $JSONReport = $Global:AutoDoctorReportJSON
 . "$PSScriptRoot\core\engine.ps1"
 
 # Load modules
-Get-ChildItem "$PSScriptRoot\modules\*.ps1" | ForEach-Object {
+$moduleLoadOrder = @(
+    "systeminfo.ps1",
+    "uptime.ps1",
+    "memory.ps1",
+    "cpu.ps1",
+    "disk.ps1",
+    "network.ps1",
+    "events.ps1",
+    "startup.ps1",
+    "software.ps1",
+    "drivers.ps1",
+    "windowsupdate.ps1",
+    "windowspatches.ps1",
+    "validation.ps1",
+    "history.ps1",
+    "anomaly.ps1",
+    "correlation.ps1",
+    "rootcause.ps1",
+    "remediation.ps1"
+)
+
+Get-ChildItem "$PSScriptRoot\modules\*.ps1" |
+Sort-Object {
+    $index = $moduleLoadOrder.IndexOf($_.Name)
+    if ($index -ge 0) { $index } else { [int]::MaxValue }
+}, Name | ForEach-Object {
     try {
         . $_.FullName
     }
@@ -240,61 +311,61 @@ foreach ($mod in $moduleResults) {
 
         # -----------------------------
         "Memory Analysis" {
-            $Sections += Add-Section "Memory Status" $mod.Result
+            $Sections += Add-Section "Memory Status" $mod.Result -SectionId "memory-status" -Category "memory" -DataPath "Memory" -Collapsible
         }
 
         # -----------------------------
         "Disk Analysis" {
-            $Sections += Add-Section "Disk Usage" $mod.Result.DiskUsage
-            $Sections += Add-Section "Disk SMART Health" $mod.Result.SMARTHealth
-            $Sections += Add-Section "Disk IO Summary" $mod.Result.DiskIOSummary
+            $Sections += Add-Section "Disk Usage" $mod.Result.DiskUsage -SectionId "disk-usage" -Category "disk" -DataPath "Disk.Usage" -Collapsible
+            $Sections += Add-Section "Disk SMART Health" $mod.Result.SMARTHealth -SectionId "disk-smart-health" -Category "disk" -DataPath "Disk.SMARTHealth" -Collapsible
+            $Sections += Add-Section "Disk IO Summary" $mod.Result.DiskIOSummary -SectionId "disk-io-summary" -Category "disk" -DataPath "Disk.IO" -Collapsible
         }
 
         # -----------------------------
         "Network Analysis" {
-            $Sections += Add-Section "Network Connectivity" $mod.Result.Connectivity
-            $Sections += Add-Section "Network Adapters" $mod.Result.Adapters
+            $Sections += Add-Section "Network Connectivity" $mod.Result.Connectivity -SectionId "network-connectivity" -Category "network" -DataPath "Network.Connectivity" -Collapsible
+            $Sections += Add-Section "Network Adapters" $mod.Result.Adapters -SectionId "network-adapters" -Category "network" -DataPath "Network.Adapters" -Collapsible
         }
 
         # -----------------------------
         "Event Log Analysis" {
-            $Sections += Add-Section "Recent System Errors" $mod.Result.RecentErrors
+            $Sections += Add-Section "Recent System Errors" $mod.Result.RecentErrors -SectionId "recent-system-errors" -Category "events" -DataPath "EventLogs" -Collapsible
         }
 
         # -----------------------------
         "Startup Analysis" {
-            $Sections += Add-Section "Startup Programs" $mod.Result.StartupPrograms
+            $Sections += Add-Section "Startup Programs" $mod.Result.StartupPrograms -SectionId "startup-programs" -Category "startup" -DataPath "StartupPrograms" -Collapsible
         }
 
         # -----------------------------
         "System Information" {
-            $Sections += Add-Section "System Information" $mod.Result
+            $Sections += Add-Section "System Information" $mod.Result -SectionId "system-information" -Category "system" -DataPath "SystemInfo" -Collapsible
         }
 
         # -----------------------------
         "System Uptime" {
-            $Sections += Add-Section "System Uptime" $mod.Result
+            $Sections += Add-Section "System Uptime" $mod.Result -SectionId "system-uptime" -Category "system" -DataPath "SystemUptime" -Collapsible
         }
 
         # -----------------------------
         "Windows Update Status" {
-            $Sections += Add-Section "Windows Update Status" $mod.Result
+            $Sections += Add-Section "Windows Update Status" $mod.Result -SectionId "windows-update-status" -Category "updates" -DataPath "WindowsUpdate" -Collapsible
         }
 
         # -----------------------------
         "Windows Patch History" {
-            $Sections += Add-Section "Recent Security/Critical/Cumulative Updates" $mod.Result.SecurityUpdates
-            $Sections += Add-Section "Recent Feature Updates" $mod.Result.FeatureUpdates
+            $Sections += Add-Section "Recent Security/Critical/Cumulative Updates" $mod.Result.SecurityUpdates -SectionId "recent-security-updates" -Category "updates" -DataPath "WindowsPatchHistory.SecurityUpdates" -Collapsible
+            $Sections += Add-Section "Recent Feature Updates" $mod.Result.FeatureUpdates -SectionId "recent-feature-updates" -Category "updates" -DataPath "WindowsPatchHistory.FeatureUpdates" -Collapsible
         }
 
         # -----------------------------
         "Driver Inventory" {
-            $Sections += Add-Section "Driver Inventory" $mod.Result
+            $Sections += Add-Section "Driver Inventory" $mod.Result -SectionId "driver-inventory" -Category "drivers" -DataPath "Drivers" -Collapsible
         }
 
         # -----------------------------
         "Installed Software" {
-            $Sections += Add-Section "Installed Software" $mod.Result
+            $Sections += Add-Section "Installed Software" $mod.Result -SectionId "installed-software" -Category "software" -DataPath "InstalledSoftware" -Collapsible
         }
     }
 }
@@ -302,10 +373,10 @@ foreach ($mod in $moduleResults) {
 # -----------------------------
 # ROOT CAUSE & HEALTH SCORE
 # -----------------------------
+# Report generation and persistence pull summary/health directly from
+# $ModuleResults, so the local root module is only needed here for
+# additional section extraction.
 $rootModule = $moduleResults | Where-Object Module -eq "Root Cause Analysis"
-
-$issuesText = $rootModule.Result.Summary
-$healthText = $rootModule.Result.HealthText
 $engineRuntime = ($moduleResults | Where-Object Module -eq "Engine Runtime").Result.ScriptRuntimeSeconds
 
 $execText = if ($engineRuntime) {
@@ -315,16 +386,20 @@ else {
     "Execution stats not available"
 }
 
-$Sections += Add-Section "Root Cause Analysis" $issuesText
-$Sections += Add-Section "System Health Score" $healthText
-$Sections += Add-Section "Execution Statistics" $execText
+if ($rootModule -and $rootModule.Result -and $rootModule.Result.Details) {
+    if (@($rootModule.Result.Details.ValidationIssues).Count -gt 0) {
+        $Sections += Add-Section "Data Integrity Findings" $rootModule.Result.Details.ValidationIssues -SectionId "data-integrity-findings" -Category "validation" -DataPath "RootCauseDetails.ValidationIssues" -Collapsible
+    }
+}
+
+$Sections += Add-Section "Execution Statistics" $execText -SectionId "execution-statistics" -Category "execution" -DataPath "ExecutionStats" -Collapsible
 
 # -----------------------------
 # AUTOMATIC REMEDIATION
 # -----------------------------
 $remediationResult = Get-SafeModuleResult -ModuleResults $moduleResults -ModuleName "Self-Healing Remediation"
 $remediationText = if ($remediationResult) { $remediationResult } else { "No remediation actions executed" }
-$Sections += Add-Section "Automatic Remediation" $remediationText
+$Sections += Add-Section "Automatic Remediation" $remediationText -SectionId "automatic-remediation" -Category "remediation" -DataPath "AutomaticRemediation" -Collapsible
 
 # -----------------------------------------------------------------------------
 # DIAGNOSTICS STORAGE
@@ -465,6 +540,8 @@ catch {
 $ReportDir = Get-AutoDoctorPath "Reports"
 $HTMLReport = $Global:AutoDoctorReportHTML
 $JSONReport = $Global:AutoDoctorReportJSON
+$MarkdownReport = $Global:AutoDoctorReportMarkdown
+$PDFReport = $Global:AutoDoctorReportPDF
 
 # Ensure report directory exists
 if (!(Test-Path -LiteralPath $ReportDir)) {
@@ -480,7 +557,17 @@ New-AutoDoctorReport -Sections $Sections -ModuleResults $ModuleResults -OutputPa
 # -----------------------------
 # JSON Structured Report
 # -----------------------------
-New-AutoDoctorJsonReport -ModuleResults $ModuleResults -OutputPath $JSONReport
+New-AutoDoctorJsonReport -ModuleResults $ModuleResults -Sections $Sections -OutputPath $JSONReport
+
+# -----------------------------
+# Markdown report
+# -----------------------------
+New-AutoDoctorMarkdownReport -ModuleResults $ModuleResults -Sections $Sections -OutputPath $MarkdownReport
+
+# -----------------------------
+# PDF report
+# -----------------------------
+Export-AutoDoctorPdfReport -HtmlPath $HTMLReport -OutputPath $PDFReport -PrintMode "full" -Preset "admin"
 
 
 # ------------------------------------------------

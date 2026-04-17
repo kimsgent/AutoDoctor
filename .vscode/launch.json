@@ -1,19 +1,30 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "type": "PowerShell",
-            "request": "launch",
-            "name": "Run AutoDoctor Agent",
-            "script": "${workspaceFolder}/agent/AutoDoctor.ps1"
-        },
-        {
-            "type": "debugpy",
-            "request": "launch",
-            "name": "Run Dashboard API",
-            "program": "${workspaceFolder}/server/api/app.py",
-            "console": "integratedTerminal",
-            "justMyCode": false
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "PowerShell",
+      "request": "launch",
+      "name": "Initialize AutoDoctor",
+      "script": "${workspaceFolder}/agent/Initialize-AutoDoctor.ps1"
+    },
+    {
+      "type": "PowerShell",
+      "request": "launch",
+      "name": "Run AutoDoctor Agent",
+      "script": "${workspaceFolder}/agent/AutoDoctor.ps1"
+    },
+    {
+      "type": "debugpy",
+      "request": "launch",
+      "name": "Run Dashboard API",
+      "python": "${workspaceFolder}/server/api/.venv/Scripts/python.exe",
+      "program": "${workspaceFolder}/server/api/run_autodoctor.py",
+      "cwd": "${workspaceFolder}/server/api",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "AUTO_DOCTOR_HOME": "${workspaceFolder}"
+      }
+    }
+  ]
 }

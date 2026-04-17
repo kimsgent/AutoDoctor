@@ -70,6 +70,24 @@ logging.basicConfig(level=logging.INFO)
 logging.info(f"AUTO_DOCTOR_META_JSON = {META_FILE_ENV}")
 logging.info(f"META_FILE exists? {META_FILE.exists() if META_FILE else 'NO META_FILE'}")
 
+
+def resolve_report_json_file():
+    candidates = []
+
+    if auto_doctor_home:
+        candidates.append(pathlib.Path(auto_doctor_home) / "reports" / "AutoDoctor_Report.json")
+
+    candidates.append(pathlib.Path(BASE_DIR).resolve().parents[1] / "reports" / "AutoDoctor_Report.json")
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0]
+
+
+REPORT_JSON_FILE = resolve_report_json_file()
+
 # ------------------------------------------------
 # CORS CONFIGURATION
 # ------------------------------------------------
@@ -180,6 +198,20 @@ def run_query(query_func):
             conn.close()
 
 
+def load_dashboard_meta_payload():
+    if META_FILE and META_FILE.exists():
+        try:
+            return json.loads(META_FILE.read_text(encoding="utf-8-sig"))
+        except Exception:
+            pass
+
+    return {
+        "run_id": "unknown",
+        "host_name": os.getenv("COMPUTERNAME", "unknown"),
+        "generated_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
 # ------------------------------------------------
 # API SERVICE HEALTH ENDPOINT
 # ------------------------------------------------
@@ -263,21 +295,40 @@ async def modules(request: Request):
 async def dashboard_meta(request: Request):
     await verify_api_key(request)  # optional security
 
-    if META_FILE and META_FILE.exists():
-        try:
-            # Accept UTF-8 files with or without BOM.
-            return json.loads(META_FILE.read_text(encoding="utf-8-sig"))
-        except Exception:
-            # fallback if JSON corrupted
-            return {
-                "run_id": "unknown",
-                "host_name": os.getenv("COMPUTERNAME", "unknown"),
-                "generated_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            }
+    return load_dashboard_meta_payload()
 
-    # fallback if file missing
-    return {
-        "run_id": "unknown",
-        "host_name": os.getenv("COMPUTERNAME", "unknown"),
-        "generated_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
+
+@app.get("/api/dashboard/summary")
+async def dashboard_summary(request: Request):
+    await verify_api_key(request)
+
+    if not REPORT_JSON_FILE.exists():
+        return {
+            "run_id": "unknown",
+            "host_name": os.getenv("COMPUTERNAME", "unknown"),
+            "generated_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "health": {
+                "numeric": 0,
+                "display": "Health score not available",
+                "summary": "No report data available",
+                "main_concern": "No report data available",
+            },
+            "window": {},
+            "metric_states": [],
+            "why_health_changed": {
+                "primary_driver": None,
+                "supporting_factors": [],
+                "stable_components": [],
+                "score_findings": [],
+            },
+            "latest_findings": [],
+            "findings_by_domain": [],
+        }
+
+    try:
+        report = json.loads(REPORT_JSON_FILE.read_text(encoding="utf-8-sig"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read report JSON: {exc}")
+
+    meta = load_dashboard_meta_payload()
+    return queries.build_dashboard_summary(report, meta=meta)

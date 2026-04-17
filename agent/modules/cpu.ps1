@@ -5,8 +5,23 @@
 Register-AutoDoctorModule -Name "CPU Analysis" -Execute {
 
     # --- Process Analysis ---
-    $topCPU = Invoke-Safe {
+    $topCPU = @()
+    $topCpuRaw = Invoke-Safe {
         Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 ProcessName, CPU
+    }
+
+    if ($topCpuRaw) {
+        $topCPU = @($topCpuRaw | ForEach-Object {
+                $cpuSeconds = 0
+                if ($null -ne $_.CPU) {
+                    $cpuSeconds = [math]::Round([double]$_.CPU, 2)
+                }
+
+                [PSCustomObject]@{
+                    ProcessName = [string]$_.ProcessName
+                    CPU         = $cpuSeconds
+                }
+            })
     }
 
     # --- CPU Load (English PerfCounter -> localized PerfCounter -> WMI) ---
@@ -30,8 +45,11 @@ Register-AutoDoctorModule -Name "CPU Analysis" -Execute {
         }
     }
 
-    if ($cpuCounterSample) {
-        $cpuPercent = [math]::Round($cpuCounterSample.CounterSamples[0].CookedValue, 2)
+    if ($cpuCounterSample -and $cpuCounterSample.CounterSamples -and $cpuCounterSample.CounterSamples.Count -gt 0) {
+        $sampleValue = $cpuCounterSample.CounterSamples[0].CookedValue
+        if ($null -ne $sampleValue) {
+            $cpuPercent = [math]::Round([double]$sampleValue, 2)
+        }
     }
     else {
         Write-Warning "PerfCounter failed, fallback to WMI"
@@ -50,9 +68,13 @@ Register-AutoDoctorModule -Name "CPU Analysis" -Execute {
         }
     }
 
+    if ($cpuPercent -lt 0) { $cpuPercent = 0 }
+    if ($cpuPercent -gt 100) { $cpuPercent = 100 }
+    $cpuPercent = [math]::Round([double]$cpuPercent, 2)
+
     $cpuObj = [PSCustomObject]@{
         CurrentCPULoadPercent = $cpuPercent
-        TopProcesses = $topCPU
+        TopProcesses          = @($topCPU)
     }
 
     return $cpuObj
