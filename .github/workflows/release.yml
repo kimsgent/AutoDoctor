@@ -58,19 +58,33 @@ jobs:
           # use in current step too
           Write-Host "Using VERSION=$versionInput"
 
+      - name: Validate release version
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        shell: pwsh
+        run: |
+          $versionFile = (Get-Content VERSION -TotalCount 1).Trim()
+          $tagVersion = $env:VERSION.TrimStart("v")
+
+          if ($versionFile -ne $tagVersion) {
+            Write-Error "Tag version $tagVersion does not match VERSION file $versionFile"
+            exit 1
+          }
+
+          Write-Host "OK: tag version matches VERSION file ($versionFile)"
+
       - name: Determine prerelease and dry-run
         id: prerelease
         shell: pwsh
         run: |
           if ($env:VERSION -match "(alpha|beta|rc|test|-test)") {
-            echo "prerelease=true" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+            "prerelease=true" >> $env:GITHUB_OUTPUT
           } else {
-            echo "prerelease=false" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+            "prerelease=false" >> $env:GITHUB_OUTPUT
           }
           if ($env:VERSION -eq "v0.0.0-test") {
-            echo "dryrun=true" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+            "dryrun=true" >> $env:GITHUB_OUTPUT
           } else {
-            echo "dryrun=false" | Out-File -Encoding utf8 -NoNewline $env:GITHUB_OUTPUT
+            "dryrun=false" >> $env:GITHUB_OUTPUT
           }
 
       - name: Generate release notes
@@ -88,6 +102,22 @@ jobs:
           } else {
             Write-Host "WARNING: RELEASE_NOTES.md missing"
           }
+
+      - name: Install Inno Setup
+        if: ${{ steps.prerelease.outputs.dryrun != 'true' }}
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+
+          if (-not $iscc -and -not (Test-Path -LiteralPath $isccPath)) {
+            Write-Error "ISCC.exe not found after installing Inno Setup"
+            exit 1
+          }
+
+          Write-Host "OK: Inno Setup compiler is available"
 
       - name: Build AutoDoctor Installer
         if: ${{ steps.prerelease.outputs.dryrun != 'true' }}
