@@ -99,6 +99,7 @@ htmlcov/
 # Python Virtual Environments
 # -----------------------------
 .venv/
+.venv-codex/
 venv/
 env/
 .direnv/
