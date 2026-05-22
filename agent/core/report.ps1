@@ -1869,13 +1869,18 @@ function Resolve-AutoDoctorChromiumPath {
     $candidateList = @(
         $PreferredPath
         $env:AUTO_DOCTOR_CHROMIUM_PATH
-        (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe")
-        (Join-Path ${env:ProgramFiles(x86)} "Google\Chrome\Application\chrome.exe")
-        (Join-Path $env:LocalAppData "Google\Chrome\Application\chrome.exe")
-        (Join-Path $env:ProgramFiles "Chromium\Application\chrome.exe")
-        (Join-Path ${env:ProgramFiles(x86)} "Chromium\Application\chrome.exe")
-        (Join-Path $env:LocalAppData "Chromium\Application\chrome.exe")
     ) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique
+
+    $installRoots = @(
+        $env:ProgramFiles
+        ${env:ProgramFiles(x86)}
+        $env:LocalAppData
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique
+
+    foreach ($root in $installRoots) {
+        $candidateList += Join-Path $root "Google\Chrome\Application\chrome.exe"
+        $candidateList += Join-Path $root "Chromium\Application\chrome.exe"
+    }
 
     foreach ($candidate in $candidateList) {
         if (Test-Path -LiteralPath $candidate) {
@@ -1883,9 +1888,9 @@ function Resolve-AutoDoctorChromiumPath {
         }
     }
 
-    foreach ($commandName in @("chrome.exe", "chrome", "chromium.exe", "chromium")) {
+    foreach ($commandName in @("chrome.exe", "chromium.exe")) {
         try {
-            $resolved = (Get-Command $commandName -ErrorAction Stop).Source
+            $resolved = (Get-Command $commandName -CommandType Application -ErrorAction Stop).Source
             if ($resolved) {
                 return $resolved
             }
@@ -1895,6 +1900,25 @@ function Resolve-AutoDoctorChromiumPath {
     }
 
     return $null
+}
+
+function Write-AutoDoctorReportLog {
+    param([Parameter(Mandatory = $true)][string]$Message)
+
+    if ([string]::IsNullOrWhiteSpace([string]$Global:AutoDoctorLogFile)) {
+        return
+    }
+
+    try {
+        $logDirectory = Split-Path -Parent $Global:AutoDoctorLogFile
+        if (-not [string]::IsNullOrWhiteSpace($logDirectory) -and -not (Test-Path -LiteralPath $logDirectory)) {
+            New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+        }
+
+        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $Message" | Out-File $Global:AutoDoctorLogFile -Append
+    }
+    catch {
+    }
 }
 
 function ConvertTo-AutoDoctorFileUri {
@@ -1933,14 +1957,17 @@ function Export-AutoDoctorPdfReport {
     )
 
     if (-not (Test-Path -LiteralPath $HtmlPath)) {
-        Write-Warning "PDF export skipped because the HTML report does not exist: $HtmlPath"
+        $message = "PDF export skipped because the HTML report does not exist: $HtmlPath"
+        Write-Warning $message
+        Write-AutoDoctorReportLog -Message $message
         return $false
     }
 
     $browserPath = Resolve-AutoDoctorChromiumPath -PreferredPath $ChromiumPath
     if (-not $browserPath) {
-        $installCommand = "winget install -e --id Google.Chrome"
-        Write-Warning "Headless Chromium export is unavailable because Google Chrome was not found. Install it with: $installCommand"
+        $message = "PDF report skipped because Google Chrome or Chromium is not installed. Chrome is required for AutoDoctor PDF reports; install Google Chrome and rerun AutoDoctor to create the PDF report."
+        Write-Warning $message
+        Write-AutoDoctorReportLog -Message $message
         return $false
     }
 
@@ -1973,7 +2000,15 @@ function Export-AutoDoctorPdfReport {
         & $browserPath "--headless=new" @commonArgs | Out-Null
     }
     catch {
-        & $browserPath "--headless" @commonArgs | Out-Null
+        try {
+            & $browserPath "--headless" @commonArgs | Out-Null
+        }
+        catch {
+            $message = "PDF report skipped because Chrome could not start: $($_.Exception.Message)"
+            Write-Warning $message
+            Write-AutoDoctorReportLog -Message $message
+            return $false
+        }
     }
 
     if (Test-Path -LiteralPath $OutputPath) {
@@ -1981,6 +2016,8 @@ function Export-AutoDoctorPdfReport {
         return $true
     }
 
-    Write-Warning "Chromium completed without creating the PDF report: $OutputPath"
+    $message = "Chrome completed without creating the PDF report: $OutputPath"
+    Write-Warning $message
+    Write-AutoDoctorReportLog -Message $message
     return $false
 }
