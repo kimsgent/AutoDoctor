@@ -56,6 +56,7 @@ The script will:
 
 - read `AutoDoctor\VERSION`
 - generate Windows version resources for both EXEs
+- stamp the installer file version from `VERSION` using four numeric parts, for example `1.2.1.0`
 - build `autodoctor_api.exe`
 - build `autodoctor_service` (one-dir service bundle)
 - compile `AutoDoctorInstaller_<version>.exe` unless `-SkipInstaller` is used
@@ -174,7 +175,11 @@ The installer script is:
 Compile it from PowerShell:
 
 ```powershell
-& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$(Get-Content .\AutoDoctor\VERSION -TotalCount 1)" ".\AutoDoctor\installer\AutoDoctorInstaller.iss"
+$version = (Get-Content .\AutoDoctor\VERSION -TotalCount 1).Trim()
+$fileVersionParts = @($version.Split("."))
+while ($fileVersionParts.Count -lt 4) { $fileVersionParts += "0" }
+$fileVersion = $fileVersionParts -join "."
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" "/DMyAppFileVersion=$fileVersion" ".\AutoDoctor\installer\AutoDoctorInstaller.iss"
 ```
 
 Expected output:

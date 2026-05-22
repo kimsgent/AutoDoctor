@@ -37,9 +37,40 @@ import servicemanager
 import subprocess
 import sys
 import os
+import time
 import traceback
 import logging
 import configparser
+
+
+def should_start_service_dispatcher(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    return getattr(sys, "frozen", False) and len(argv) == 1
+
+
+def ensure_child_process_running(process, launch_cmd, grace_seconds=2.0):
+    deadline = time.monotonic() + grace_seconds
+
+    while time.monotonic() < deadline:
+        exit_code = process.poll()
+
+        if exit_code is not None:
+            raise RuntimeError(
+                "API process exited during startup with code "
+                f"{exit_code}: {' '.join(launch_cmd)}"
+            )
+
+        time.sleep(0.1)
+
+    exit_code = process.poll()
+
+    if exit_code is not None:
+        raise RuntimeError(
+            "API process exited during startup with code "
+            f"{exit_code}: {' '.join(launch_cmd)}"
+        )
 
 
 def get_runtime_dir():
@@ -209,6 +240,7 @@ class AutoDoctorAPIService(win32serviceutil.ServiceFramework):
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
 
+            ensure_child_process_running(self.process, launch_cmd)
             logging.info("AutoDoctor API process started")
 
         except Exception as e:
@@ -287,5 +319,18 @@ class AutoDoctorAPIService(win32serviceutil.ServiceFramework):
             self.process = None
 
 
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    if should_start_service_dispatcher():
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(AutoDoctorAPIService)
+        servicemanager.StartServiceCtrlDispatcher()
+        return 0
+
+    return win32serviceutil.HandleCommandLine(AutoDoctorAPIService, argv=argv)
+
+
 if __name__ == "__main__":
-    win32serviceutil.HandleCommandLine(AutoDoctorAPIService)
+    sys.exit(main())

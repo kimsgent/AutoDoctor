@@ -223,6 +223,7 @@ VSVersionInfo(
 $paths = Get-ProjectPaths
 $version = Get-AutoDoctorVersion -VersionFile $paths.VersionFile
 $versionParts = Get-VersionParts -Version $version
+$fileVersion = ($versionParts -join ".")
 $pythonCommand = Resolve-PythonCommand -ExplicitPythonExe $PythonExe -RequestedVersion $PythonVersion
 
 if (-not $SkipInstaller) {
@@ -323,6 +324,7 @@ $installerPath = $null
 if (-not $SkipInstaller) {
     $isccArgs = @(
         "/DMyAppVersion=$version",
+        "/DMyAppFileVersion=$fileVersion",
         $paths.InstallerFile
     )
 
@@ -337,6 +339,7 @@ if (-not $SkipInstaller) {
 Write-Host ""
 Write-Host "Build completed successfully." -ForegroundColor Green
 Write-Host ("Version:            {0}" -f $version)
+Write-Host ("File version:       {0}" -f $fileVersion)
 Write-Host ("API executable:     {0}" -f (Join-Path $paths.DistDir "autodoctor_api.exe"))
 Write-Host ("Service executable: {0}" -f (Join-Path $paths.DistDir "autodoctor_service\autodoctor_service.exe"))
 
