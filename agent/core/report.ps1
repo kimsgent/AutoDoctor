@@ -1863,28 +1863,176 @@ function New-AutoDoctorMarkdownReport {
     Write-Host "Markdown report created: $OutputPath" -ForegroundColor Green
 }
 
+function Get-AutoDoctorExecutablePathFromRegistryValue {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace([string]$Value)) {
+        return $null
+    }
+
+    $trimmed = ([string]$Value).Trim()
+    if ($trimmed -match '^\s*"([^"]+\.exe)"') {
+        return $Matches[1]
+    }
+
+    if ($trimmed -match '^\s*(.+?\.exe)') {
+        return $Matches[1].Trim()
+    }
+
+    return $trimmed.Trim('"')
+}
+
+function Get-AutoDoctorChromiumRegistryCandidates {
+    $candidates = @()
+
+    $registryViews = @([Microsoft.Win32.RegistryView]::Default)
+    try {
+        if ([Environment]::Is64BitOperatingSystem) {
+            $registryViews = @(
+                [Microsoft.Win32.RegistryView]::Registry64
+                [Microsoft.Win32.RegistryView]::Registry32
+            )
+        }
+    }
+    catch {
+    }
+
+    $registryHives = @(
+        [Microsoft.Win32.RegistryHive]::CurrentUser
+        [Microsoft.Win32.RegistryHive]::LocalMachine
+    )
+
+    $appPathKeys = @(
+        [PSCustomObject]@{ Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"; Executable = "chrome.exe" }
+        [PSCustomObject]@{ Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chromium.exe"; Executable = "chromium.exe" }
+    )
+
+    $uninstallKeys = @(
+        [PSCustomObject]@{ Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Google Chrome"; Executable = "chrome.exe" }
+        [PSCustomObject]@{ Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Chromium"; Executable = "chromium.exe" }
+    )
+
+    foreach ($view in $registryViews) {
+        foreach ($hive in $registryHives) {
+            $baseKey = $null
+            try {
+                $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive, $view)
+
+                foreach ($entry in $appPathKeys) {
+                    $key = $null
+                    try {
+                        $key = $baseKey.OpenSubKey($entry.Path)
+                        if (-not $key) {
+                            continue
+                        }
+
+                        $defaultPath = Get-AutoDoctorExecutablePathFromRegistryValue -Value ([string]$key.GetValue(""))
+                        if ($defaultPath) {
+                            $candidates += $defaultPath
+                        }
+
+                        $pathValue = [string]$key.GetValue("Path")
+                        if (-not [string]::IsNullOrWhiteSpace($pathValue)) {
+                            foreach ($pathRoot in ($pathValue -split ';')) {
+                                if (-not [string]::IsNullOrWhiteSpace($pathRoot)) {
+                                    $candidates += Join-Path $pathRoot.Trim() $entry.Executable
+                                }
+                            }
+                        }
+                    }
+                    catch {
+                    }
+                    finally {
+                        if ($key) {
+                            $key.Close()
+                        }
+                    }
+                }
+
+                foreach ($entry in $uninstallKeys) {
+                    $key = $null
+                    try {
+                        $key = $baseKey.OpenSubKey($entry.Path)
+                        if (-not $key) {
+                            continue
+                        }
+
+                        $installLocation = [string]$key.GetValue("InstallLocation")
+                        if (-not [string]::IsNullOrWhiteSpace($installLocation)) {
+                            $candidates += Join-Path $installLocation.Trim() $entry.Executable
+                            $candidates += Join-Path $installLocation.Trim() ("Application\{0}" -f $entry.Executable)
+                        }
+
+                        $displayIcon = Get-AutoDoctorExecutablePathFromRegistryValue -Value ([string]$key.GetValue("DisplayIcon"))
+                        if ($displayIcon) {
+                            $candidates += $displayIcon
+                        }
+                    }
+                    catch {
+                    }
+                    finally {
+                        if ($key) {
+                            $key.Close()
+                        }
+                    }
+                }
+            }
+            catch {
+            }
+            finally {
+                if ($baseKey) {
+                    $baseKey.Close()
+                }
+            }
+        }
+    }
+
+    return $candidates
+}
+
 function Resolve-AutoDoctorChromiumPath {
     param([string]$PreferredPath = "")
 
-    $candidateList = @(
+    $candidateList = @(@(
         $PreferredPath
         $env:AUTO_DOCTOR_CHROMIUM_PATH
-    ) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique)
 
     $installRoots = @(
+        ${env:ProgramW6432}
         $env:ProgramFiles
         ${env:ProgramFiles(x86)}
         $env:LocalAppData
-    ) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$env:SystemDrive)) {
+        $installRoots += Join-Path $env:SystemDrive "Program Files"
+        $installRoots += Join-Path $env:SystemDrive "Program Files (x86)"
+    }
+
+    $installRoots = @($installRoots | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique)
 
     foreach ($root in $installRoots) {
         $candidateList += Join-Path $root "Google\Chrome\Application\chrome.exe"
         $candidateList += Join-Path $root "Chromium\Application\chrome.exe"
     }
 
+    $candidateList += @(Get-AutoDoctorChromiumRegistryCandidates)
+    $candidateList = @($candidateList | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique)
+
     foreach ($candidate in $candidateList) {
-        if (Test-Path -LiteralPath $candidate) {
-            return $candidate
+        $expandedCandidate = [Environment]::ExpandEnvironmentVariables([string]$candidate)
+        if (Test-Path -LiteralPath $expandedCandidate -PathType Leaf) {
+            return $expandedCandidate
+        }
+
+        if (Test-Path -LiteralPath $expandedCandidate -PathType Container) {
+            foreach ($commandName in @("chrome.exe", "chromium.exe")) {
+                $nestedCandidate = Join-Path $expandedCandidate $commandName
+                if (Test-Path -LiteralPath $nestedCandidate -PathType Leaf) {
+                    return $nestedCandidate
+                }
+            }
         }
     }
 

@@ -67,6 +67,7 @@ Minimum runtime:
 - Windows x64
 - Administrator privileges for installer and agent execution
 - PowerShell 5.1+
+- Optional: Google Chrome or Chromium for automatic PDF report generation
 
 For `system_python` service mode:
 
@@ -115,6 +116,7 @@ Important environment variables:
 | `AUTO_DOCTOR_API_KEY` | Optional API key enforcement |
 | `AUTO_DOCTOR_CORS_ORIGINS` | CORS allow-list override |
 | `AUTO_DOCTOR_SYSTEM_PYTHON` | Installer: explicit interpreter path for system mode |
+| `AUTO_DOCTOR_CHROMIUM_PATH` | Optional explicit Chrome/Chromium executable path for PDF reports |
 
 Host/port precedence:
 
