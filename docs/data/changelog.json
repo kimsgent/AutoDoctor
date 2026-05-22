@@ -9,7 +9,8 @@
         "fix(report): skip PDF export when Chrome is unavailable",
         "fix(report): improve Chrome detection for PDF report generation",
         "fix(report): confirm PDF output before logging report status",
-        "fix(installer): stamp setup EXE file version and copyright metadata from VERSION"
+        "fix(installer): stamp setup EXE file version and copyright metadata from VERSION",
+        "fix(workflow): validate release tags and preserve release workflow outputs"
       ]
     },
 

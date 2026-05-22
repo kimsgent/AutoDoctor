@@ -9,3 +9,4 @@ Release date: 2026-05-22
 - fix(report): improve Chrome detection for PDF report generation
 - fix(report): confirm PDF output before logging report status
 - fix(installer): stamp setup EXE file version and copyright metadata from VERSION
+- fix(workflow): validate release tags and preserve release workflow outputs
