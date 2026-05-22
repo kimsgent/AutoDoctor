@@ -8,7 +8,7 @@
 #endif
 #define MyAppPublisher "Project Indexly"
 #define MyAppURL "https://projectindexly.com"
-#define MyAppCopyright "Copyright (C) Project Indexly. projectindexly.com"
+#define MyAppCopyright "projectindexly.com"
 #define MyServiceName "AutoDoctorAPI"
 #define MyServiceDisplayName "AutoDoctor Telemetry API"
 #define MyServiceDescription "AutoDoctor monitoring API service"
