@@ -2069,6 +2069,25 @@ function Write-AutoDoctorReportLog {
     }
 }
 
+function Wait-AutoDoctorReportFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [int]$TimeoutSeconds = 10,
+        [int]$PollIntervalMilliseconds = 250
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        if (Test-Path -LiteralPath $Path -PathType Leaf) {
+            return $true
+        }
+
+        Start-Sleep -Milliseconds $PollIntervalMilliseconds
+    } while ((Get-Date) -lt $deadline)
+
+    return (Test-Path -LiteralPath $Path -PathType Leaf)
+}
+
 function ConvertTo-AutoDoctorFileUri {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -2159,12 +2178,14 @@ function Export-AutoDoctorPdfReport {
         }
     }
 
-    if (Test-Path -LiteralPath $OutputPath) {
-        Write-Host "PDF report created: $OutputPath" -ForegroundColor Green
+    if (Wait-AutoDoctorReportFile -Path $OutputPath) {
+        $message = "PDF report created: $OutputPath"
+        Write-Host $message -ForegroundColor Green
+        Write-AutoDoctorReportLog -Message $message
         return $true
     }
 
-    $message = "Chrome completed without creating the PDF report: $OutputPath"
+    $message = "Chrome completed, but AutoDoctor could not confirm the PDF report at: $OutputPath"
     Write-Warning $message
     Write-AutoDoctorReportLog -Message $message
     return $false
