@@ -2,6 +2,18 @@
   "project": "AutoDoctor",
   "versions": [
     {
+      "version": "1.2.1",
+      "date": "2026-05-22",
+      "changes": [
+        "fix(service): start the bundled service through the Windows SCM dispatcher",
+        "fix(report): skip PDF export when Chrome is unavailable",
+        "fix(report): improve Chrome detection for PDF report generation",
+        "fix(report): confirm PDF output before logging report status",
+        "fix(installer): stamp setup EXE file version and copyright metadata from VERSION"
+      ]
+    },
+
+    {
       "version": "1.2.0",
       "date": "2026-04-17",
       "changes": [
