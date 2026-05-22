@@ -134,14 +134,24 @@ host = host or os.environ.get("AUTO_DOCTOR_API_HOST", "127.0.0.1")
 port = int(port or os.environ.get("AUTO_DOCTOR_API_PORT", 8000))
 
 
+def load_asgi_app():
+    try:
+        from api.app import app
+    except ModuleNotFoundError as exc:
+        if exc.name != "api":
+            raise
+
+        from app import app
+
+    return app
+
+
 # ------------------------------------------------
 # Start FastAPI
 # ------------------------------------------------
 if __name__ == "__main__":
-    from api.app import app
-
     uvicorn.run(
-        app,
+        load_asgi_app(),
         host=host,
         port=port,
         log_level="info",
