@@ -3,8 +3,12 @@
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
 #endif
+#ifndef MyAppFileVersion
+  #define MyAppFileVersion "0.0.0.0"
+#endif
 #define MyAppPublisher "Project Indexly"
 #define MyAppURL "https://projectindexly.com"
+#define MyAppCopyright "Copyright (C) Project Indexly. projectindexly.com"
 #define MyServiceName "AutoDoctorAPI"
 #define MyServiceDisplayName "AutoDoctor Telemetry API"
 #define MyServiceDescription "AutoDoctor monitoring API service"
@@ -23,6 +27,13 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoCopyright={#MyAppCopyright}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoTextVersion={#MyAppFileVersion}
+VersionInfoVersion={#MyAppFileVersion}
 DefaultDirName={commonappdata}\AutoDoctor
 DisableDirPage=yes
 DefaultGroupName={#MyAppName}
